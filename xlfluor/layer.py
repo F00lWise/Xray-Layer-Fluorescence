@@ -1,39 +1,57 @@
 from xlfluor import Element
 from xlfluor import Composite
+from functions import fresnel_t, fresnel_r
 from FLASHutil import little_helpers as lh
+
 import scipy.constants as constants
-C_r0  = constants.physical_constants['classical electron radius'][0]
+
+C_r0 = constants.physical_constants['classical electron radius'][0]
+
 import numpy as np
 
-def fresnel_t(beta1, beta2):
-    return 2 * beta1 / (beta1 + beta2)
-def fresnel_r(beta1, beta2):
-    return (beta1 - beta2) / (beta1 + beta2)
-
+global DEBUG
 
 class Layer:
     """
     Container class for layer data
     """
 
-    def __init__(self, element, thickness, depth_resolution=None, inelastic_cross=0, density=None, sigma=None):
+    def __init__(self, material, thickness, inelastic_cross=0, density=None):
 
         if density is not None:  # Specifit density specified, so I need to re-define
-            if type(element) is Element:
-                element = Element(name=element.name, Z=element.Z, atom_weight=element.atom_weight, density=density)
-            elif type(element) is Composite:
-                element = Composite(name=element.name, elements=element.elements, density=density,
-                                    composition=element.composition)
-        self.el = element
+            if type(material) is Element:
+                material = Element(name=material.name, Z=material.Z, atom_weight=material.atom_weight, density=density)
+            elif type(material) is Composite:
+                material = Composite(name=material.name, elements=material.elements, density=density,
+                                     composition=material.composition)
+        self.material = material
         self.d = thickness * 1e-9  # nm->m
-        self.d_steps = depth_resolution  # Number of steps in which the thickness is divided for calculations
         self.sigma_inel = inelastic_cross
-        self.sigma = None if sigma is None else sigma * 1e-9  # surface roughness
+        self.is_active = inelastic_cross > 0
+        self.min_z = None
+        self.max_z = None
+        self.z_points = None
+
+        self.known_solutions = {}
+
+        if DEBUG:
+            print(f'{self.material.name} Layer Initiated.')
+
+    def solve(self, problem, d: float= None, rho: float= None, final=False):
+        if rho is not None:
+            self.material.update_density(rho)
+        if d is not None:
+            self.d = d
+
+        solution_key = (self.d, self.material.density)
+        if not solution_key in self.known_solutions.keys():
+            self.known_solutions[solution_key] = LayerSolution(self, solution_key, problem, final=final)
+        return self.known_solutions[solution_key]
 
     def beta(self, E, theta):
         wavl_given = lh.eV2nm(E) * 1e-9  # in meters
-        prefactor = self.el.atomar_density * wavl_given ** 2 / (2 * np.pi)
-        f = self.el.f(E)
+        prefactor = self.material.atomar_density * wavl_given ** 2 / (2 * np.pi)
+        f = self.material.f(E)
         self.cdelta = prefactor * C_r0 * (-np.real(f) + 1j * np.imag(f))
         return np.sqrt(1 + (2 * self.cdelta / theta ** 2))
 
@@ -99,3 +117,48 @@ class Layer:
     def T(self, E, theta):
         L = self.L(E, theta)
         return L[0, 0] - (L[0, 1] * L[1, 0]) / L[1, 1]
+
+
+class LayerSolution:
+    """
+    Calculates all required single-layer L-matrices in the constructor
+    """
+    def __init__(self, layer, solution_key, problem, final=False):
+        self.solution_ID = solution_key
+        self.problem = problem
+
+        self.L_matrices_in = np.zeros((4, 4, len(self.problem.energies_in), len(self.problem.angles_in)), dtype=complex)
+        self.L_matrices_out = np.zeros((4, 4, len(self.problem.energies_out), len(self.problem.angles_out)), dtype=complex)
+
+        # Partial L-matrizes for field within cavity
+        self.L_matrices_in_partials = np.zeros((4, 4, len(self.problem.energies_in), len(self.problem..angles_in), len(layer.z_points)),
+                                               dtype=complex)
+        if layer.is_active:  # Emitted fields are only needed with depth resolution for active layers
+            self.L_matrices_out_partials = np.zeros((4, 4, len(self.problem.energies_out), len(self.problem..angles_out), len(layer.z_points)),
+                                                    dtype=complex)
+
+        # Incident field Matrices
+        for i_E, E in enumerate(self.problem..energies_in):
+            for i_a, angle in enumerate(self.problem..angles_in):
+                if final:
+                    self.L_matrices_in[:, :, i_E, i_a] = layer.L_final(E, angle)
+                else:
+                    self.L_matrices_in[:, :, i_E, i_a] = layer.L(E, angle)
+
+                for i_z, z in layer.z_points:
+                    self.L_matrices_in_partials[:, :, i_E, i_a, i_z] = layer.L(E, angle, z - layer.min_z)
+
+        # Emitted field Matrices
+        for i_E, E in enumerate(self.problem.energies_out):
+            for i_a, angle in enumerate(self.problem.angles_out):
+                if final:
+                    self.L_matrices_out[:, :, i_E, i_a] = layer.L_final(E, angle)
+                else:
+                    self.L_matrices_out[:, :, i_E, i_a] = layer.L(E, angle)
+
+                if layer.is_active:
+                    for i_z, z in layer.z_points:
+                        self.L_matrices_out_partials[:, :, i_E, i_a, i_z] = layer.L(E, angle, z - layer.min_z)
+
+        if DEBUG:
+            print('Layer Solution Calculated.')

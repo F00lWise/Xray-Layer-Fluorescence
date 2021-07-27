@@ -4,6 +4,9 @@ class Cavity:
     def __init__(self, layer_list):
         self.D = np.sum([layer.d for layer in layer_list[:-1]])
         self.layer_list = layer_list
+        if DEBUG:
+            print('Cavity Initiated.')
+    #    def update
 
     def L(self, E, theta, z=None):
         if z is not None and (z * 1e-9 < self.D):
@@ -30,7 +33,7 @@ class Cavity:
                 L_center = layer.L(E, theta) @ L_center
                 d_represented += layer.d
         if not reached_z:
-            print('Warning: I did not reach the prompted depdth with the known layers')
+            print('Warning: I did not reach the prompted depth with the known layers')
             return np.nan
         return L_center
 
@@ -79,4 +82,5 @@ class Cavity:
 
         # print(A_emitted, A_emitted_old)
         return A_emitted, A_local
+
 
