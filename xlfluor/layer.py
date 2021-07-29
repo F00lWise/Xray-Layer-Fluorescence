@@ -1,5 +1,5 @@
-from xlfluor import Element
-from xlfluor import Composite
+from xlfluor import Element, Composite, Problem
+
 from functions import fresnel_t, fresnel_r
 from FLASHutil import little_helpers as lh
 
@@ -10,6 +10,51 @@ C_r0 = constants.physical_constants['classical electron radius'][0]
 import numpy as np
 
 global DEBUG
+
+class LayerSolution:
+    """
+    Calculates all required single-layer L-matrices in the constructor
+    """
+    def __init__(self, layer, solution_key, problem, final=False):
+        self.solution_ID = solution_key
+        self.problem = problem
+
+        self.L_matrices_in = np.empty((len(self.problem.energies_in), len(self.problem.angles_in),2,2), dtype=complex)
+        self.L_matrices_out = np.empty((len(self.problem.energies_out), len(self.problem.angles_out),2,2), dtype=complex)
+
+        # Partial L-matrizes for field within cavity
+        self.L_matrices_in_partials = np.empty((len(self.problem.energies_in), len(self.problem.angles_in), len(layer.z_points),2,2),
+                                               dtype=complex)
+        if layer.is_active:  # Emitted fields are only needed with depth resolution for active layers
+            self.L_matrices_out_partials = np.empty((len(self.problem.energies_out), len(self.problem.angles_out), len(layer.z_points),2,2),
+                                                    dtype=complex)
+
+## This is where I can later parallelize
+        # Incident field Matrices
+        for i_E, E in enumerate(self.problem.energies_in):
+            for i_a, angle in enumerate(self.problem.angles_in):
+                if final:
+                    self.L_matrices_in[i_E, i_a,:,:] = layer.L_final(E, angle)
+                else:
+                    self.L_matrices_in[i_E, i_a,:,:] = layer.L(E, angle)
+
+                for i_z, z in layer.z_points:
+                    self.L_matrices_in_partials[i_E, i_a, i_z,:,:] = layer.L(E, angle, z - layer.min_z)
+
+        # Emitted field Matrices
+        for i_E, E in enumerate(self.problem.energies_out):
+            for i_a, angle in enumerate(self.problem.angles_out):
+                if final:
+                    self.L_matrices_out[i_E, i_a,:,:] = layer.L_final(E, angle)
+                else:
+                    self.L_matrices_out[i_E, i_a,:,:] = layer.L(E, angle)
+
+                if layer.is_active:
+                    for i_z, z in layer.z_points:
+                        self.L_matrices_out_partials[i_E, i_a, i_z,:,:] = layer.L(E, angle, z - layer.min_z)
+
+        if DEBUG:
+            print('Layer Solution Calculated.')
 
 class Layer:
     """
@@ -26,18 +71,32 @@ class Layer:
                                      composition=material.composition)
         self.material = material
         self.d = thickness * 1e-9  # nm->m
+        self.density = density
         self.sigma_inel = inelastic_cross
         self.is_active = inelastic_cross > 0
         self.min_z = None
         self.max_z = None
         self.z_points = None
-
+        self.dz = None
         self.known_solutions = {}
+        self.solution = None
 
         if DEBUG:
             print(f'{self.material.name} Layer Initiated.')
 
-    def solve(self, problem, d: float= None, rho: float= None, final=False):
+    def solve(self, problem: Problem, d: float = None, rho: float = None, final: bool = False) -> LayerSolution:
+        """
+        This function calculates solution matrices for the layer and stores them as a LayerSolution Objext in
+        self.solution as well as in the known_solutions dictionary.
+        If a solution for this thickness and density is known in the dictionary, it is loaded to self.solution instead
+        Also returns the solution.
+        :param problem: Problem (mostly necessary for coordinates)
+        :param d: thickness
+        :param rho: density
+        :param final: If true, layer is treated as substate
+        :return: LayerSolution
+        """
+
         if rho is not None:
             self.material.update_density(rho)
         if d is not None:
@@ -46,6 +105,8 @@ class Layer:
         solution_key = (self.d, self.material.density)
         if not solution_key in self.known_solutions.keys():
             self.known_solutions[solution_key] = LayerSolution(self, solution_key, problem, final=final)
+
+        self.solution = self.known_solutions[solution_key]
         return self.known_solutions[solution_key]
 
     def beta(self, E, theta):
@@ -119,46 +180,3 @@ class Layer:
         return L[0, 0] - (L[0, 1] * L[1, 0]) / L[1, 1]
 
 
-class LayerSolution:
-    """
-    Calculates all required single-layer L-matrices in the constructor
-    """
-    def __init__(self, layer, solution_key, problem, final=False):
-        self.solution_ID = solution_key
-        self.problem = problem
-
-        self.L_matrices_in = np.zeros((4, 4, len(self.problem.energies_in), len(self.problem.angles_in)), dtype=complex)
-        self.L_matrices_out = np.zeros((4, 4, len(self.problem.energies_out), len(self.problem.angles_out)), dtype=complex)
-
-        # Partial L-matrizes for field within cavity
-        self.L_matrices_in_partials = np.zeros((4, 4, len(self.problem.energies_in), len(self.problem..angles_in), len(layer.z_points)),
-                                               dtype=complex)
-        if layer.is_active:  # Emitted fields are only needed with depth resolution for active layers
-            self.L_matrices_out_partials = np.zeros((4, 4, len(self.problem.energies_out), len(self.problem..angles_out), len(layer.z_points)),
-                                                    dtype=complex)
-
-        # Incident field Matrices
-        for i_E, E in enumerate(self.problem..energies_in):
-            for i_a, angle in enumerate(self.problem..angles_in):
-                if final:
-                    self.L_matrices_in[:, :, i_E, i_a] = layer.L_final(E, angle)
-                else:
-                    self.L_matrices_in[:, :, i_E, i_a] = layer.L(E, angle)
-
-                for i_z, z in layer.z_points:
-                    self.L_matrices_in_partials[:, :, i_E, i_a, i_z] = layer.L(E, angle, z - layer.min_z)
-
-        # Emitted field Matrices
-        for i_E, E in enumerate(self.problem.energies_out):
-            for i_a, angle in enumerate(self.problem.angles_out):
-                if final:
-                    self.L_matrices_out[:, :, i_E, i_a] = layer.L_final(E, angle)
-                else:
-                    self.L_matrices_out[:, :, i_E, i_a] = layer.L(E, angle)
-
-                if layer.is_active:
-                    for i_z, z in layer.z_points:
-                        self.L_matrices_out_partials[:, :, i_E, i_a, i_z] = layer.L(E, angle, z - layer.min_z)
-
-        if DEBUG:
-            print('Layer Solution Calculated.')
