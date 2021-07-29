@@ -1,7 +1,8 @@
 import numpy as np
 import scipy.constants as constants
 import os
-global DEBUG
+
+DEBUG = True
 
 C_amu = constants.physical_constants['atomic mass constant'][0]
 C_r0  = constants.physical_constants['classical electron radius'][0]
@@ -49,14 +50,14 @@ class Element(Material):
 
 
 class Composite(Material):
-    def __init__(self, name: str, elements, density: float, composition: tuple):
+    def __init__(self, name: str, elements, density: float, composition: list):
         super().__init__(name, density)
         self.elements = elements
 
         assert len(elements) == len(composition), 'Composition must contain one entry per element.'
         elements = np.array(elements)
         self.composition = np.array(composition)
-        self._compute_partial_number_densities(self.composition, density)
+        self._compute_partial_number_densities(density)
 
     def _compute_partial_number_densities(self, density):
         N = len(self.elements)
