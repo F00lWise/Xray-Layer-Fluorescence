@@ -36,8 +36,8 @@ parameters = cavity.parameters
 """#### Let us read some experimental data for comparison
 wide_scan = pd.read_pickle('scan_486_wide_angle_diode.gz')
 experiment_data = {
-    'fluor_trace': lh.normmax(wide_scan.fluor_diode),
-    'refl_trace': lh.normmax(wide_scan.refl),
+    'fluor_trace': xlf.normmax(wide_scan.fluor_diode),
+    'refl_trace': xlf.normmax(wide_scan.refl),
     'angles_in': np.array(wide_scan['sry']),
     'angles_out': np.array(wide_scan['sry']),
     'energies_in': np.array([wide_scan['energy'], ]),
@@ -48,8 +48,8 @@ experiment_data = {
 #### Manual solution for testing
 energies_in=np.array([7300])
 energies_out=np.array([6400])
-angles_in = np.linspace(lh.deg2rad(0.2),lh.deg2rad(1.0),210)
-angles_out =np.linspace(lh.deg2rad(0.2),lh.deg2rad(1.0),200)
+angles_in = np.linspace(xlf.deg2rad(0.2),xlf.deg2rad(1.0),210)
+angles_out =np.linspace(xlf.deg2rad(0.2),xlf.deg2rad(1.0),200)
 
 axes = (energies_in,energies_out,angles_in,angles_out)
 
@@ -65,12 +65,12 @@ my_problem.solve(cavity, parameters)
 plt.figure(figsize=(7, 5))
 ax1 = plt.gca()
 plt.ylabel('Normalized Intensity / arb. u.')
-plt.plot(lh.rad2deg(my_problem.angles_in), xlf.abs2(my_problem.reflectivity)[0,:] * np.nan, 'C4-',
+plt.plot(xlf.normmax(my_problem.angles_in), xlf.abs2(my_problem.reflectivity)[0,:] * np.nan, 'C4-',
          label='Simulated Reflectivity')  # dummy plots for legend
-plt.plot(lh.rad2deg(my_problem.angles_in), xlf.abs2(my_problem.reflectivity)[0,:] * np.nan, 'C0--',
+plt.plot(xlf.normmax(my_problem.angles_in), xlf.abs2(my_problem.reflectivity)[0,:] * np.nan, 'C0--',
          label='Measured Reflectivity')
 
-plt.plot(lh.rad2deg(my_problem.angles_in), lh.normmax(xlf.abs2(my_problem.fluorescence_I_angle_in_dependent)), c='C3',
+plt.plot(xlf.normmax(my_problem.angles_in), xlf.normmax(xlf.abs2(my_problem.fluorescence_I_angle_in_dependent)), c='C3',
          label='Simulated Fluorescence')
 data_shift = 0
 
@@ -81,7 +81,7 @@ plt.yticks([])
 plt.ylim(None, 2)
 
 ax2 = plt.gca().twinx()
-plt.plot(lh.rad2deg(my_problem.angles_in), lh.normmax(xlf.abs2(my_problem.reflectivity)[0,:]), 'C4-', label='Simulated refl')
+plt.plot(xlf.normmax(my_problem.angles_in), xlf.normmax(xlf.abs2(my_problem.reflectivity)[0,:]), 'C4-', label='Simulated refl')
 plt.ylabel('Reflectivity')
 plt.ylim(-1, None)
 plt.yticks([0, 0.5, 1])
@@ -106,7 +106,7 @@ plotmat = xlf.abs2(np.nansum(cavity.solution.fluorescence_local_amplitude[0,0,:,
 #plotmat = cplxsq(np.sum(my_problem.fluor_emitted_from_z[:,:,:],0))
 
 plt.figure()
-plt.pcolormesh(lh.rad2deg(my_problem.angles_in),lh.rad2deg(my_problem.angles_out),\
+plt.pcolormesh(xlf.normmax(my_problem.angles_in),xlf.normmax(my_problem.angles_out),\
                plotmat.T,norm = mpl.colors.LogNorm(vmin = 0.005), cmap = 'gnuplot', shading = 'nearest')#,vmax=4e3)#
 plt.ylabel('Output angle / °')
 plt.xlabel('Input angle / °')
@@ -118,23 +118,23 @@ plt.tight_layout()
 #########################################
 
 
-example_angle_in = lh.deg2rad(0.3)
+example_angle_in = xlf.deg2rad(0.3)
 example_angle_in_index = np.argmin(np.abs(example_angle_in-my_problem.angles_in))
 
-example_angle_out = lh.deg2rad(0.342)
+example_angle_out = xlf.deg2rad(0.342)
 example_angle_out_index = np.argmin(np.abs(example_angle_out-my_problem.angles_out))
 
 
 
 fig, axes = plt.subplots(2,1, figsize = (7,5))
 plt.sca(axes[0])
-plt.pcolormesh(lh.rad2deg(my_problem.angles_in),my_problem.z_axis*1e9,\
+plt.pcolormesh(xlf.normmax(my_problem.angles_in),my_problem.z_axis*1e9,\
                xlf.abs2(cavity.solution.fluorescence_local_amplitude_propagated[0,0,:,example_angle_out_index,:]).T,shading = 'nearest',cmap = 'gnuplot')
-plt.axvline(lh.rad2deg(example_angle_in), ls = '--', lw= 1, c='grey')
+plt.axvline(xlf.normmax(example_angle_in), ls = '--', lw= 1, c='grey')
 
 plt.ylabel('Cavity depth $z_p$ / nm')
 plt.xlabel('Input angle / °')
-plt.title(r'Fluorescence Intensity $\theta_{in}$ dependency at $\theta_{out}$ ='+f' {lh.rad2deg(my_problem.angles_out[example_angle_out_index]):.2}°')
+plt.title(r'Fluorescence Intensity $\theta_{in}$ dependency at $\theta_{out}$ ='+f' {xlf.normmax(my_problem.angles_out[example_angle_out_index]):.2}°')
 plt.colorbar(label=r'$\tilde{I}_{-} / I_0$')
 plt.gca().invert_yaxis()
 plt.ylim(32.5,36.5)
@@ -142,12 +142,12 @@ plt.tight_layout()
 plt.gca().invert_yaxis()
 
 plt.sca(axes[1])
-plt.pcolormesh(lh.rad2deg(my_problem.angles_out),my_problem.z_axis*1e9,\
+plt.pcolormesh(xlf.normmax(my_problem.angles_out),my_problem.z_axis*1e9,\
                xlf.abs2(cavity.solution.fluorescence_local_amplitude_propagated[0,0,example_angle_in_index,:,:]).T,shading = 'nearest', vmax=None,cmap = 'gnuplot')#, norm = mpl.colors.LogNorm()
-plt.axvline(lh.rad2deg(example_angle_out), ls = '--', lw= 1, c='grey')
+plt.axvline(xlf.normmax(example_angle_out), ls = '--', lw= 1, c='grey')
 plt.ylabel('Cavity depth $z_p$ / nm')
 plt.xlabel('Output angle / $^\circ$')
-plt.title(r'Fluorescence Intensity $\theta_{out}$ dependency at $\theta_{in}$ ='+f' {lh.rad2deg(my_problem.angles_in[example_angle_in_index]):.2}°')
+plt.title(r'Fluorescence Intensity $\theta_{out}$ dependency at $\theta_{in}$ ='+f' {xlf.normmax(my_problem.angles_in[example_angle_in_index]):.2}°')
 plt.colorbar(label=r'$\tilde{I}_{-} / I_0$')
 plt.gca().invert_yaxis()
 plt.ylim(32.5,36.5)

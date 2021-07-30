@@ -1,5 +1,4 @@
 import xlfluor as xlf
-from FLASHutil import little_helpers as lh
 import numpy as np
 
 import scipy.constants as constants
@@ -66,7 +65,7 @@ class Layer:
         return self.known_solutions[solution_key]
 
     def beta(self, E, theta):
-        wavl_given = lh.eV2nm(E) * 1e-9  # in meters
+        wavl_given = xlf.eV2nm(E) * 1e-9  # in meters
         prefactor = self.material.atomar_density * wavl_given ** 2 / (2 * np.pi)
         f = self.material.f(E)
         self.cdelta = prefactor * C_r0 * (-np.real(f) + 1j * np.imag(f))
@@ -87,7 +86,7 @@ class Layer:
         beta_0 = 1 + 0j
         beta_n = self.beta(E, theta)
 
-        wavl = lh.eV2nm(E) * 1e-9
+        wavl = xlf.eV2nm(E) * 1e-9
         k0 = 2 * np.pi / wavl
         k0z = k0 * theta
         knz = beta_n * k0z
