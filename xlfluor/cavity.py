@@ -138,13 +138,13 @@ class CavitySolution:
             partial_layer_index: int = self.problem.z_layer_indices[iz]
             partial_layer = self.cavity.layer_list[partial_layer_index]
 
+            """
             # Mask all the values that we do not calculate anyways
             if not partial_layer.is_active:
                 self.L_matrices_out_partials[:, :, iz, :, :] = np.nan
                 self.L_matrices_out_partials_inverse[:, :, iz, :, :] = np.nan
-
-
-            # Cavity Matrix up to layer in question
+            """
+            # Cavity Matrix up to layer that will be split up
             for n, layer in enumerate(self.cavity.layer_list[:partial_layer_index]):
                 self.L_matrices_in_partials[:,:,iz,:,:] = layer.solution.L_matrices_in[:,:,:,:]  @ self.L_matrices_in_partials[:,:,iz,:,:]
                 if partial_layer.is_active:
@@ -152,21 +152,40 @@ class CavitySolution:
 
             # Matrix of partial layer
             iz_within_layer = iz - np.where(self.problem.z_layer_indices == partial_layer_index)[0][0] # where statement finds the first z-index of the current partial layer
-            self.L_matrices_in_partials[:,:,iz_within_layer,:,:] = partial_layer.solution.L_matrices_in_partials[:,:,iz_within_layer,:,:]  @ self.L_matrices_in_partials[:,:,iz,:,:]
+            self.L_matrices_in_partials[:,:,iz,:,:] = partial_layer.solution.L_matrices_in_partials[:,:,iz_within_layer,:,:]  @ self.L_matrices_in_partials[:,:,iz,:,:]
             if partial_layer.is_active:
-                self.L_matrices_out_partials[:,:,iz_within_layer,:,:] = partial_layer.solution.L_matrices_out[:,:,:,:] @ self.L_matrices_out_partials[:,:,iz,:,:]
+                self.L_matrices_out_partials[:,:,iz,:,:] = partial_layer.solution.L_matrices_out_partials[:,:,iz_within_layer,:,:] @ self.L_matrices_out_partials[:,:,iz,:,:]
 
             # calculate reverse matrices: This equates to: L_2 = L_D @ L_1^-1
             if partial_layer.is_active:
                 self.L_matrices_out_partials_inverse[:,:,iz,:,:] = np.linalg.inv(self.L_matrices_out_partials[:,:,iz,:,:]) #L(z_p)^-1
                 self.L_matrices_out_partials_reverse[:,:,iz,:,:] = self.L_matrices_out @ self.L_matrices_out_partials_inverse[:,:,iz,:,:] # L2 = L(D) @ L ^-1
+    # V1 Code
+    def _L_partial_old(self, E, theta, z):
+        d_represented = 0
+        reached_z = False
+        L_center = np.identity(2)
+        for i, layer in enumerate(self.layer_list[:-1]):
+            if d_represented + layer.d > z:
+                L_center = layer.L(E,theta, (d_represented + layer.d - z) )@L_center
+                reached_z = True
+                break
+            else:
+                L_center = layer.L(E,theta)@L_center
+                d_represented += layer.d
+        if not reached_z:
+            print('Warning: I did not reach the prompted depdth with the known layers')
+            return np.nan
+        return L_center
+
 
     def consistency_check(self):
         Assembled_L = self.L_matrices_out_partials_reverse @ self.L_matrices_out_partials
 
-        imprecision = np.empty(self.L_matrices_out_partials_reverse.shape)
-        for iz,z in self.problem.z_axis:
-            imprecision[:,:,iz,:,:] = Assembled_L - self.L_matrices_out
+        imprecision = np.empty(self.L_matrices_out_partials_reverse.shape, dtype = complex)
+        for iz,z in enumerate(self.problem.z_axis):
+            imprecision[:,:,iz,:,:] = Assembled_L[:,:,iz,:,:] - self.L_matrices_out
+        return imprecision
 
     def calc_R(self):
         """

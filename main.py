@@ -48,8 +48,8 @@ experiment_data = {
 #### Manual solution for testing
 energies_in=np.array([7300])
 energies_out=np.array([6400])
-angles_in = np.linspace(xlf.deg2rad(0.2),xlf.deg2rad(1.0),210)
-angles_out =np.linspace(xlf.deg2rad(0.2),xlf.deg2rad(1.0),200)
+angles_in  = np.linspace(xlf.deg2rad(0.2),xlf.deg2rad(1.0),250) #np.array([xlf.deg2rad(0.3)])#
+angles_out = np.linspace(xlf.deg2rad(0.2),xlf.deg2rad(1.0),260) #np.array(xlf.deg2rad(np.array([0.2,0.3])))#
 
 axes = (energies_in,energies_out,angles_in,angles_out)
 
@@ -58,6 +58,7 @@ my_problem = xlf.Problem(cavity, experiment_data = None, axes=axes, passive_laye
 
 my_problem.solve(cavity, parameters)
 
+cavity.solution.consistency_check()
 
 ###################################################
 ##### Diode trace plots
@@ -154,6 +155,18 @@ plt.ylim(32.5,36.5)
 plt.tight_layout()
 plt.gca().invert_yaxis()
 
+###################################
 
+plt.figure(figsize = (7,5))
+plt.pcolormesh(lh.rad2deg(my_problem.angles_in),my_problem.z_axis*1e9, xlf.abs2(cavity.solution.incident_field_amplitude[0,:,:].T),\
+               shading = 'nearest',cmap = 'gnuplot')
+
+plt.ylabel('Cavity depth $z$ / nm')
+plt.xlabel('Incident angle $ { \Theta}_{in}$ / $^\circ$')
+plt.title('Excitation Intensity')
+#plt.colorbar(label='$I / I_0$')
+plt.gca().invert_yaxis()
+plt.tight_layout()
+plt.ylim(80,None)
 
 plt.show()
