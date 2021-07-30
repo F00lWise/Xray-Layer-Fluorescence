@@ -86,7 +86,7 @@ class Layer:
         beta_0 = 1 + 0j
         beta_n = self.beta(E, theta)
 
-        wavl = xlf.eV2nm(E) * 1e-9
+        wavl = xlf.eV2nm(E) * 1e-9 # 1e9 factor to change unit to meters
         k0 = 2 * np.pi / wavl
         k0z = k0 * theta
         knz = beta_n * k0z
@@ -166,8 +166,8 @@ class LayerSolution:
                 else:
                     self.L_matrices_in[i_E, i_a, :, :] = layer.L(E, angle)
 
-                for i_z, z in enumerate(layer.z_points):
-                    self.L_matrices_in_partials[i_E, i_a, i_z, :, :] = layer.L(E, angle, z - layer.min_z)
+                for i_z, z_in_layer in enumerate(layer.z_points):
+                    self.L_matrices_in_partials[i_E, i_a, i_z, :, :] = layer.L(E, angle, z_in_layer)
 
         # Emitted field Matrices
         for i_E, E in enumerate(self.problem.energies_out):
@@ -178,8 +178,8 @@ class LayerSolution:
                     self.L_matrices_out[i_E, i_a, :, :] = layer.L(E, angle)
 
                 if layer.is_active:
-                    for i_z, z in enumerate(layer.z_points):
-                        self.L_matrices_out_partials[i_E, i_a, i_z, :, :] = layer.L(E, angle, z - layer.min_z)
+                    for i_z, z_in_layer in enumerate(layer.z_points):
+                        self.L_matrices_out_partials[i_E, i_a, i_z, :, :] = layer.L(E, angle, z_in_layer)
 
         if DEBUG:
             print('Layer Solution Calculated.')

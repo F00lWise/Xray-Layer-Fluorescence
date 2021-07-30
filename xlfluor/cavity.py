@@ -1,6 +1,6 @@
 import numpy as np
 import lmfit
-import xlfluor
+import xlfluor as xlf
 
 DEBUG = True
 
@@ -160,23 +160,6 @@ class CavitySolution:
             if partial_layer.is_active:
                 self.L_matrices_out_partials_inverse[:,:,iz,:,:] = np.linalg.inv(self.L_matrices_out_partials[:,:,iz,:,:]) #L(z_p)^-1
                 self.L_matrices_out_partials_reverse[:,:,iz,:,:] = self.L_matrices_out @ self.L_matrices_out_partials_inverse[:,:,iz,:,:] # L2 = L(D) @ L ^-1
-    # V1 Code
-    def _L_partial_old(self, E, theta, z):
-        d_represented = 0
-        reached_z = False
-        L_center = np.identity(2)
-        for i, layer in enumerate(self.layer_list[:-1]):
-            if d_represented + layer.d > z:
-                L_center = layer.L(E,theta, (d_represented + layer.d - z) )@L_center
-                reached_z = True
-                break
-            else:
-                L_center = layer.L(E,theta)@L_center
-                d_represented += layer.d
-        if not reached_z:
-            print('Warning: I did not reach the prompted depdth with the known layers')
-            return np.nan
-        return L_center
 
 
     def consistency_check(self):
@@ -226,7 +209,7 @@ class CavitySolution:
             R1 = -L1i[:,:,relevant_z_indices,0, 1] / L1i[:,:,relevant_z_indices,0, 0]  # -L1[1,0]/L1[1,1]
             R2 = -L2[:,:,relevant_z_indices,1, 0] / L2[:,:,relevant_z_indices,1, 1]  # -L2[0,1]/L2[1,1]
 
-            excitation_intensity = xlfluor.abs2(self.incident_field_amplitude[:,:,relevant_z_indices])       # Ein,Ain,z(layer)
+            excitation_intensity = xlf.abs2(self.incident_field_amplitude[:,:,relevant_z_indices])       # Ein,Ain,z(layer)
             fluorescence_intensity = excitation_intensity * layer.sigma_inel * layer.dz * self.problem.d_angle_out/(2*np.pi) # Ein,Ain,z(layer)
             fluorescence_amplitude = np.sqrt(fluorescence_intensity)   # I Multiply the fluorescence amplitude with the z-resolution to make the result (sum) independent of number of layers.
 
