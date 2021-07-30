@@ -8,7 +8,7 @@ class Problem:
     """
     This class takes care of the coordinate system that the simulation is performed in.
     """
-    def __init__(self, cavity, experiment_data: dict = None, axes: dict = None, passive_layer_resolution: int = 1, active_layer_resolution: int = 10):
+    def __init__(self, cavity, experiment_data: dict = None, axes: tuple = None, passive_layer_resolution: int = 1, active_layer_resolution: int = 10):
         """
 
         :param cavity:
