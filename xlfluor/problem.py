@@ -1,6 +1,6 @@
 import numpy as np
 import xlfluor as xlf
-
+import concurrent.futures
 DEBUG = True
 
 
@@ -13,29 +13,35 @@ class Problem:
 
         :param cavity:
         :param experiment_data: Either this or axes_data must be given to  build coordinate system
-                            example_experiment_data = {
-                                'fluor_trace': lh.normmax(wide_scan.fluor_diode),
-                                'refl_trace': lh.normmax(wide_scan.refl),
-                                'angles_in': np.array(wide_scan['sry']),
-                                'angles_out': np.array(wide_scan['sry']),
-                                'energies_in': np.array([wide_scan['energy'], ]),
-                                'energies_out': np.array([6400, ])
-                            }
+            Axes are taken from experiment data if given there, otherwise taken from axes.
+                experiment_data = {
+                    'fluor_trace': xlf.normmax(loaded_scan['fluor_diode']),
+                    'refl_trace': xlf.normmax(loaded_scan['refl']),
+                    'angles_in': np.array(loaded_scan['sry']),
+                    'energies_in': np.array([loaded_scan['energy'], ]),
+                    'energies_out': np.array([6400, ])
+                }
         :param axes: Either this or axes_data must be given to  build coordinate system
         """
+        ### Initialize multiprocessing pool
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=6)
+
         ## store cavity
         self.cavity = cavity
 
+        ## store experiment
+        self.experiment = experiment_data
         #### Generate coordinates to calculate everything in
 
-        if experiment_data is not None:
-            self.axes = experiment_data['energies_in'], experiment_data['energies_out'], experiment_data['angles_in'], experiment_data['angles_out']
-            if axes is not None:
-                assert axes == self.axes
-        elif axes is not None:
-            self.axes = axes
-        else:
-            raise ValueError('To generate axes I either need experimental data or specific axes')
+        axes_list= []
+        for i, axname in enumerate( ['energies_in','energies_out','angles_in','angles_out']):
+            if experiment_data is not None and axname in experiment_data.keys():
+                axes_list.append(experiment_data[axname])
+            elif axes is not None and axname in axes.keys():
+                axes_list.append(axes[axname])
+            else:
+                raise ValueError(f'Axes {axname} found neither in the experiment data nor in the axes dictionary')
+        self.axes = tuple(axes_list)
 
         #### Figure out the z-axis
         z_axis = []
@@ -86,6 +92,14 @@ class Problem:
         cavity.propose_problem((self))
         if DEBUG:
             print('Problem Initiated.')
+
+
+    def __del__(self):
+        print("Destructing the problem.")
+        self.executor.shutdown()
+
+    def __repr__(self):
+        return f'Problem({id(self)})'
 
     def solve(self, cavity, parameters):
         assert cavity.solution.problem is self #just check that we are all pointing to the same problem

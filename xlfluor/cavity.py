@@ -2,8 +2,22 @@ import numpy as np
 import lmfit
 import xlfluor as xlf
 
+import concurrent.futures
+import time
 DEBUG = True
 
+def timeit(func):
+    """
+    Decorator for measuring function's running time.
+    """
+    def measure_time(*args, **kw):
+        start_time = time.time()
+        result = func(*args, **kw)
+        print("Processing time of %s(): %.3f milliseconds."
+              % (func.__qualname__, 1e3*(time.time() - start_time)))
+        return result
+
+    return measure_time
 
 class Cavity:
     """
@@ -32,7 +46,7 @@ class Cavity:
         """
         self.solution = CavitySolution(self, problem)
 
-    def layer_list_to_parameters(self,layer_list, d_tolerance=1, rho_tolerance=0.5e3):
+    def layer_list_to_parameters(self,layer_list, d_tolerance=2e-9, rho_tolerance=0.5e3):
         """
         takes in a parameter list and generates a layer list from it which can be treated by an optimizer
         :param layer_list:
@@ -48,6 +62,13 @@ class Cavity:
 
             params.add(prefix + 'rho', value=layer.density, min=layer.density - rho_tolerance,
                      max=layer.density + rho_tolerance)
+
+        # Scaling parameters - multiplier to the simulated data to fit to normalized measurement data
+        params.add('fluorescence_scaling', value = 5.e-3, min = 5.e-5, max = 5.e-2)
+        params.add('reflectivity_scaling', value = 1, min = 0.5, max = 2)
+
+        # Data angle shift
+        params.add('experiment_angle_err', value = -0.025, min = -0.05, max = 0.05)
         return params
 
 class CavitySolution:
@@ -100,6 +121,7 @@ class CavitySolution:
 
         self._calc_fluorescence()
 
+    @timeit
     def _solve_layers(self, parameters):
         """
         Call all layer.solve() functions with new parameters.
@@ -107,13 +129,26 @@ class CavitySolution:
         :param parameters:
         :return:
         """
+# Point to parallelize
+        futures_to_layer_results = {}
         for n, layer in enumerate(self.problem.cavity.layer_list):
             prefix = f'Layer_{n}_{layer.material.name}_'
             d = parameters[prefix + 'd'].value
             rho = parameters[prefix + 'rho'].value
+            #self.layer_solutions[n] = layer.solve(self.problem, d, rho) # This is the code without parallelization
+            futures_to_layer_results[self.problem.executor.submit(layer.solve,self.problem, d, rho)] = n
 
-            self.layer_solutions[n] = layer.solve(self.problem, d, rho)
+        print('futures submitted')
+        for future in concurrent.futures.as_completed(futures_to_layer_results):
+            n = futures_to_layer_results[future]
+            try:
+                self.layer_solutions[n] = future.result()
+            except Exception as exc:
+                print('%r generated an exception: %s' % (n, exc))
 
+
+
+    #@timeit
     def _calc_L_total(self):
         """
         Calculates the transfer matrix of the entire cavity
@@ -121,10 +156,12 @@ class CavitySolution:
         """
         self.L_matrices_in[...] = np.eye(2)
         self.L_matrices_out[...] = np.eye(2)
+
         for n, layer in enumerate(self.cavity.layer_list):
             self.L_matrices_in = layer.solution.L_matrices_in @ self.L_matrices_in
             self.L_matrices_out = layer.solution.L_matrices_out @ self.L_matrices_out
 
+    @timeit
     def _calc_L_partial(self):
         """
         Calculates the transfer matrix of the cavity up to the specific depths in problem.z_axis
@@ -184,6 +221,7 @@ class CavitySolution:
         """
         return self.L_matrices_in[0, 0] - (self.L_matrices_in[0, 1] * self.L_matrices_in[1, 0]) / self.L_matrices_in[1, 1]
 
+    #@timeit
     def _calc_incident_field(self):
         """
         Calculate the field strength of the incident wave at all depth in z_axis
@@ -194,6 +232,7 @@ class CavitySolution:
                                                       (self.L_matrices_in_partials[:,:,iz,0,1] + self.L_matrices_in_partials[:,:,iz,1,1]) * \
             self.L_matrices_in[:,:,1,0] / self.L_matrices_in[:,:,1,1]
 
+    @timeit
     def _calc_fluorescence(self):
 
         # We are only interested in active layers
@@ -214,7 +253,9 @@ class CavitySolution:
             fluorescence_amplitude = np.sqrt(fluorescence_intensity)   # I Multiply the fluorescence amplitude with the z-resolution to make the result (sum) independent of number of layers.
 
             way_to_the_surface = (L1i[:,:,relevant_z_indices,1, 1] - (L1i[:,:,relevant_z_indices,1, 0] * L1i[:,:,relevant_z_indices,0, 1]) / L1i[:,:,relevant_z_indices,0, 0]).transpose(2,0,1) # Eout,Aout, z(layer)
-# Good point to parallelize
+
+
+            # Non-parallel code
             for iEin, Ein in enumerate(self.problem.energies_in):
                 for iAin, Ain in enumerate(self.problem.angles_in):
                     self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 0] = ((fluorescence_amplitude[iEin, iAin, :] * R1[...]) / (1 - R2[...] * R1[...])).transpose(2,0,1)  # A+ (down)
@@ -223,5 +264,27 @@ class CavitySolution:
                     #A_emitted = (L1i[1, 1] - (L1i[1, 0] * L1i[0, 1]) / L1i[0, 0]) * A_up
                     self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = way_to_the_surface * self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 1]
 
+            """ #This parallel code appears to run longer than the Non-parallel version! Apparently each Chunk is too small...
+            # Distribute tasks
+            futures_to_results = {}
+            def results_for_one_coordinate_pair(iEin, iAin):
+                A_up = ((fluorescence_amplitude[iEin, iAin, :] * R2[...]) / (1 - R1[...] * R2[...])).transpose(2,0,1)
+                return (((fluorescence_amplitude[iEin, iAin, :] * R1[...]) / (1 - R2[...] * R1[...])).transpose(2,0,1), A_up, way_to_the_surface * A_up)
+            for iEin, Ein in enumerate(self.problem.energies_in):
+                for iAin, Ain in enumerate(self.problem.angles_in):
+                    futures_to_results[self.problem.executor.submit(results_for_one_coordinate_pair, iEin, iAin)] = (iEin, iAin)
+
+            # Collect results
+            for future in concurrent.futures.as_completed(futures_to_results):
+                (iEin, iAin) = futures_to_results[future]
+                try:
+                    self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 0] = future.result()[0]
+                    self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 1] = future.result()[1]
+                    self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = future.result()[2]
+                except Exception as exc:
+                    print('%r generated an exception: %s' % (n, exc))
+            """
         # Finally, sum all the fluorescence over the z axis
         self.fluorescence_emitted_amplitude = np.nansum(self.fluorescence_local_amplitude_propagated,axis=4)
+
+

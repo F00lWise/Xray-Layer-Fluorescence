@@ -2,7 +2,7 @@ import numpy as np
 import scipy.constants as constants
 import os
 
-DEBUG = True
+DEBUG = False
 
 C_amu = constants.physical_constants['atomic mass constant'][0]
 C_r0  = constants.physical_constants['classical electron radius'][0]

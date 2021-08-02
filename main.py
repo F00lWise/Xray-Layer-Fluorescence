@@ -1,8 +1,8 @@
 import xlfluor as xlf
 import numpy as np
 import matplotlib.pyplot as plt
+import lmfit
 import matplotlib as mpl
-from FLASHutil import little_helpers as lh
 
 global DEBUG
 DEBUG = True
@@ -31,75 +31,136 @@ layer_list_custom = [
 
 cavity = xlf.Cavity(layer_list_custom)
 
-parameters = cavity.parameters
 
-"""#### Let us read some experimental data for comparison
-wide_scan = pd.read_pickle('scan_486_wide_angle_diode.gz')
+#### Let us read some experimental data for comparison
+keys = ['dt', 'dtz', 'fluor_diode', 'izero_diode', 'refl', 'scanNr',
+       'sry', 'sty']
+loaded_scan_mat = np.loadtxt('scan_486_wide_angle_diode.txt')
+loaded_scan = {}
+for i, key in enumerate(keys):
+    loaded_scan[key] = loaded_scan_mat[1:,i]
+
 experiment_data = {
-    'fluor_trace': xlf.normmax(wide_scan.fluor_diode),
-    'refl_trace': xlf.normmax(wide_scan.refl),
-    'angles_in': np.array(wide_scan['sry']),
-    'angles_out': np.array(wide_scan['sry']),
-    'energies_in': np.array([wide_scan['energy'], ]),
-    'energies_out': np.array([6400, ])
+    'fluor_diode': xlf.normmax(loaded_scan['fluor_diode']),
+    'refl': xlf.normmax(loaded_scan['refl']),
+    'angles_in': xlf.deg2rad(np.array(loaded_scan['sry'])),
+    'energies_out': np.array([6400])
 }
-"""
+
 
 #### Manual solution for testing
-energies_in=np.array([7300])
+energies_in=np.array([7150])
 energies_out=np.array([6400])
-angles_in  = np.linspace(xlf.deg2rad(0.2),xlf.deg2rad(1.0),250) #np.array([xlf.deg2rad(0.3)])#
-angles_out = np.linspace(xlf.deg2rad(0.2),xlf.deg2rad(1.0),260) #np.array(xlf.deg2rad(np.array([0.2,0.3])))#
+angles_in  = np.linspace(xlf.deg2rad(0.2),xlf.deg2rad(1.0),100) #np.array([xlf.deg2rad(0.3)])#
+angles_out = np.linspace(xlf.deg2rad(0.2),xlf.deg2rad(1.0),100) #np.array(xlf.deg2rad(np.array([0.2,0.3])))#
 #angles_in  = np.array([lh.deg2rad(0.3)])#np.linspace(lh.deg2rad(0.2),lh.deg2rad(0.6),40)
 #angles_out = np.array(lh.deg2rad(np.array([0.2,0.3])))#np.linspace(lh.deg2rad(0.2),lh.deg2rad(1.0),40)
-axes = (energies_in,energies_out,angles_in,angles_out)
+axes = {'energies_in': energies_in,
+        'energies_out':energies_out,
+        'angles_in': angles_in,
+        'angles_out':angles_out}
 
 
-#my_problem = xlf.Problem(cavity, experiment_data = None, axes=axes, passive_layer_resolution = 5, active_layer_resolution = 20)
-my_problem = xlf.Problem(cavity, experiment_data = None, axes=axes, passive_layer_resolution = 40, active_layer_resolution = 50)
+my_problem = xlf.Problem(cavity, experiment_data = experiment_data, axes=axes, passive_layer_resolution = 1, active_layer_resolution = 10)
+
+
+parameters = cavity.parameters
 
 my_problem.solve(cavity, parameters)
 
 cavity.solution.consistency_check()
 
+
+
+
+#############################################
+######### Final Plotting
+
+
+
 ###################################################
 ##### Diode trace plots
 ###################################################
-plt.figure(figsize=(7, 5))
-ax1 = plt.gca()
+angles_in = xlf.rad2deg(my_problem.angles_in)
+model_fluor = xlf.abs2(my_problem.fluorescence_I_angle_in_dependent)
+model_refl = xlf.abs2(my_problem.reflectivity)[0, :]
+
+exp_fluor = my_problem.experiment['fluor_diode'] * parameters['fluorescence_scaling'].value
+exp_refl = my_problem.experiment['refl'] * parameters['reflectivity_scaling'].value
+angle_error = parameters['experiment_angle_err'].value
+
+exp_refl = xlf.shift_by_delta(x=angles_in, sft=angle_error, y=exp_refl, oversampling=10)
+exp_fluor = xlf.shift_by_delta(x=angles_in, sft=angle_error, y=exp_fluor, oversampling=10)
+
+
+fig, (ax1,ax2) = plt.subplots(2,1,figsize=(7, 5))
+plt.sca(ax1)
+ax1.plot(angles_in, exp_refl, c='k', lw=2,label = 'experiment')
+ax1.plot(angles_in, model_refl, 'C4-', label='Simulated refl')
+
 plt.ylabel('Normalized Intensity / arb. u.')
-plt.plot(xlf.rad2deg(my_problem.angles_in), xlf.abs2(my_problem.reflectivity)[0,:] * np.nan, 'C4-',
-         label='Simulated Reflectivity')  # dummy plots for legend
-plt.plot(xlf.rad2deg(my_problem.angles_in), xlf.abs2(my_problem.reflectivity)[0,:] * np.nan, 'C0--',
-         label='Measured Reflectivity')
-
-plt.plot(xlf.rad2deg(my_problem.angles_in), xlf.normmax(xlf.abs2(my_problem.fluorescence_I_angle_in_dependent)), c='C3',
-         label='Simulated Fluorescence')
-data_shift = 0
-
-# plt.ylim(None,6)
 plt.xlabel('Input Angle / °')
-plt.title(f'Input Angle Dependencies')
-plt.yticks([])
-plt.ylim(None, 2)
+plt.ylabel('Fluorescence')
+plt.legend()
 
+plt.sca(ax2)
+ax2.plot(angles_in, exp_fluor, c='k', lw=2,label = 'experiment')
+ax2.plot(angles_in, model_fluor, c='C3',
+         label='Simulated Fluorescence')
+plt.xlabel('Input Angle / °')
+plt.suptitle(f'Input Angle Dependencies')
+plt.legend()
 ax2 = plt.gca().twinx()
-plt.plot(xlf.rad2deg(my_problem.angles_in), xlf.normmax(xlf.abs2(my_problem.reflectivity)[0,:]), 'C4-', label='Simulated refl')
 plt.ylabel('Reflectivity')
-plt.ylim(-1, None)
-plt.yticks([0, 0.5, 1])
+#plt.ylim(-1, None)
+#plt.yticks([0, 0.5, 1])
 plt.axhline(c='k', lw=.5)
 
+"""
 mode_angles = [.253, .2725, .317, .3625, .420, .474, .536, .598, .662]
 for angle in mode_angles:
     plt.axvline(angle - data_shift, lw=.5, c='C0', ls='--')
 mode_angles = [.253, .276, .318, .365, .420, .482, .536, .606, .655]
 for angle in mode_angles:
     plt.axvline(angle - data_shift, lw=.5, c='C1', ls='--')
+"""
 
 
 
 
+
+
+###########################################
+##### Optimization
+
+iteration_counter = xlf.optimization.counter()
+
+## Prepare plot
+fig, (ax1,ax2, ax3) = plt.subplots(3,1,figsize=(7, 5))
+plt.sca(ax1)
+plt.ylabel('Normalized Intensity / arb. u.')
+plt.xlabel('Input Angle / °')
+plt.ylabel('Fluorescence')
+plt.sca(ax2)
+plt.xlabel('Input Angle / °')
+plt.suptitle(f'Input Angle Dependencies')
+
+plt.sca(ax3)
+plt.xlabel('# Iterations')
+ax3.set_ylabel('Reflectivity Residual')
+plt.suptitle(f'Residual Plot')
+ax4 = ax3.twinx()
+ax4.set_ylabel('Fluorescence Residual')
+
+#minimize
+minimizer = lmfit.Minimizer(xlf.optimization.cost_function, params=parameters, fcn_args=(my_problem, iteration_counter, (ax1,ax2, ax3,ax4)), iter_cb = xlf.optimization.fit_monitoring)#
+
+result = minimizer.minimize(method = 'leastsq')
+
+lmfit.report_fit(result)
+
+
+"""
 #####################################################
 ######### 2d Plot
 ################################################
@@ -160,7 +221,7 @@ plt.gca().invert_yaxis()
 ###################################
 
 plt.figure(figsize = (7,5))
-plt.pcolormesh(lh.rad2deg(my_problem.angles_in),my_problem.z_axis*1e9, xlf.abs2(cavity.solution.incident_field_amplitude[0,:,:].T),\
+plt.pcolormesh(xlf.rad2deg(my_problem.angles_in),my_problem.z_axis*1e9, xlf.abs2(cavity.solution.incident_field_amplitude[0,:,:].T),\
                shading = 'nearest',cmap = 'gnuplot')
 for layer in cavity.layer_list:
     plt.axhline(layer.min_z*1e9)
@@ -171,5 +232,7 @@ plt.title('Excitation Intensity')
 plt.gca().invert_yaxis()
 plt.tight_layout()
 plt.ylim(80,None)
-
+"""
 plt.show()
+
+my_problem.__del__()

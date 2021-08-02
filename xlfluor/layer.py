@@ -51,7 +51,7 @@ class Layer:
         :param final: If true, layer is treated as substate
         :return: LayerSolution
         """
-
+        #print(f'trying to solve layer for {problem}, with {d}, and {rho}')
         if rho is not None:
             self.material.update_density(rho)
         if d is not None:
