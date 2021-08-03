@@ -169,7 +169,7 @@ class FitLogger:
 
         angles_in = xlf.rad2deg(self.problem.angles_in)
         plt.sca(self.fitaxes[0])
-        plt.plot(angles_in, model_fluor, c='C1', lw = 2, label='Final Fit')
+        plt.plot(angles_in, model_refl, c='C1', lw = 2, label='Final Fit')
         self.fitaxes_residual0.plot(angles_in,residual_refl, '.', c = 'k', label = 'Final Residual')
         plt.legend()
 
