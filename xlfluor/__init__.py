@@ -3,4 +3,4 @@ from .layer import Layer
 from .problem import Problem
 from .cavity import Cavity
 from .functions import *
-import optimization
+from .optimization import *

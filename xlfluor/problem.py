@@ -1,7 +1,7 @@
 import numpy as np
 import xlfluor as xlf
 import concurrent.futures
-DEBUG = True
+DEBUG = False
 
 
 class Problem:

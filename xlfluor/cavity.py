@@ -62,14 +62,22 @@ class Cavity:
 
             params.add(prefix + 'rho', value=layer.density, min=layer.density - rho_tolerance,
                      max=layer.density + rho_tolerance)
-
-        # Scaling parameters - multiplier to the simulated data to fit to normalized measurement data
-        params.add('fluorescence_scaling', value = 5.e-3, min = 5.e-5, max = 5.e-2)
-        params.add('reflectivity_scaling', value = 1, min = 0.5, max = 2)
-
-        # Data angle shift
-        params.add('experiment_angle_err', value = -0.025, min = -0.05, max = 0.05)
         return params
+    
+    def get_relative_intensities(self, problem):
+   
+        I_fluor = np.max(xlf.abs2(problem.fluorescence_I_angle_in_dependent))
+        I_refl = np.max(xlf.abs2(problem.reflectivity)[0, :])
+
+        # Scaling parameters - multiplier to the  uncalibrated and normalized experimental data to fit to the model data
+        self.parameters.add('I_fluorescence', value = I_fluor, min = I_fluor/10, max =I_fluor*10)
+        self.parameters.add('I_reflectivity', value = I_refl, min = I_refl/10, max =I_refl*10)
+
+        print(f'Based on the Initial fit, setting relative intensity of refl and fluor \n to {I_refl} and {I_fluor}, respectively')
+
+    def set_fit_weigths(self, weight_refl = 1, weight_fluor = 1):
+        self.parameters.add('weight_reflectivity', value = weight_refl, vary = False)
+        self.parameters.add('weight_fluorescence', value = weight_fluor, vary = False)
 
 class CavitySolution:
     """
@@ -121,7 +129,7 @@ class CavitySolution:
 
         self._calc_fluorescence()
 
-    @timeit
+    #@timeit
     def _solve_layers(self, parameters):
         """
         Call all layer.solve() functions with new parameters.
@@ -138,7 +146,7 @@ class CavitySolution:
             #self.layer_solutions[n] = layer.solve(self.problem, d, rho) # This is the code without parallelization
             futures_to_layer_results[self.problem.executor.submit(layer.solve,self.problem, d, rho)] = n
 
-        print('futures submitted')
+        #print('futures submitted')
         for future in concurrent.futures.as_completed(futures_to_layer_results):
             n = futures_to_layer_results[future]
             try:
@@ -161,7 +169,7 @@ class CavitySolution:
             self.L_matrices_in = layer.solution.L_matrices_in @ self.L_matrices_in
             self.L_matrices_out = layer.solution.L_matrices_out @ self.L_matrices_out
 
-    @timeit
+    #@timeit
     def _calc_L_partial(self):
         """
         Calculates the transfer matrix of the cavity up to the specific depths in problem.z_axis
@@ -232,7 +240,7 @@ class CavitySolution:
                                                       (self.L_matrices_in_partials[:,:,iz,0,1] + self.L_matrices_in_partials[:,:,iz,1,1]) * \
             self.L_matrices_in[:,:,1,0] / self.L_matrices_in[:,:,1,1]
 
-    @timeit
+    #@timeit
     def _calc_fluorescence(self):
 
         # We are only interested in active layers
@@ -264,7 +272,7 @@ class CavitySolution:
                     #A_emitted = (L1i[1, 1] - (L1i[1, 0] * L1i[0, 1]) / L1i[0, 0]) * A_up
                     self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = way_to_the_surface * self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 1]
 
-            """ #This parallel code appears to run longer than the Non-parallel version! Apparently each Chunk is too small...
+            """ #This parallel code appears to run longer than the Non-parallel version! Apparently each Chunk is too small, or it might by copying the arrays in between threads...
             # Distribute tasks
             futures_to_results = {}
             def results_for_one_coordinate_pair(iEin, iAin):

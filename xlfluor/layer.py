@@ -182,4 +182,4 @@ class LayerSolution:
                         self.L_matrices_out_partials[i_E, i_a, i_z, :, :] = layer.L(E, angle, z_in_layer)
 
         if DEBUG:
-            print('Layer Solution Calculated.')
+            print(f'Layer {layer.index} Solution Calculated.')
