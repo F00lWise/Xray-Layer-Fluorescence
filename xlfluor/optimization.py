@@ -75,10 +75,11 @@ def fit_monitoring(parameters, iteration_counter, residual, problem, plot_axes =
     plot_axes[2].plot(iteration_counter, total_fluor_residual, 'o',c = 'C1')
     
 class FitLogger:
-    def __init__(self, problem, parameters):
+    def __init__(self, problem, parameters, maxiter = 1000):
         
         self.parameters = parameters
         self.problem = problem
+        self.maxiter = maxiter
         
         # Make a pandas series from the parameter values
         s_par = pd.Series({par: parameters[par].value for par in parameters}, name = -1)
@@ -152,6 +153,10 @@ class FitLogger:
         self.df_resid = self.df_resid.append(s_resid)
         
         print(f'Iteration {iteration_counter} complete. Residuals: {residuals}')
+        
+        # Abort Fit condition
+        if iteration_counter > self.maxiter:
+            return True
         
         
     def final_plot(self):
