@@ -24,7 +24,7 @@ class Problem:
         :param axes: Either this or axes_data must be given to  build coordinate system
         """
         ### Initialize multiprocessing pool
-        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=6)
+        self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=cavity.N_layers)
 
         ## store cavity
         self.cavity = cavity

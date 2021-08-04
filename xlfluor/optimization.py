@@ -75,12 +75,20 @@ def fit_monitoring(parameters, iteration_counter, residual, problem, plot_axes =
     plot_axes[2].plot(iteration_counter, total_fluor_residual, 'o',c = 'C1')
     
 class FitLogger:
-    def __init__(self, problem, parameters, maxiter = 1000):
+    def __init__(self, problem, parameters, maxiter = 1000, intermediate_plotting = 0):
+        """
+
+        :param problem:
+        :param parameters:
+        :param maxiter:
+        :param intermediate_plotting: Integer. If it converts to False, no plotting occurs during run time. If N, it means that plot updates will be generated every N calls.
+        """
         
         self.parameters = parameters
         self.problem = problem
         self.maxiter = maxiter
-        
+        self.intermediate_plotting = intermediate_plotting
+
         # Make a pandas series from the parameter values
         s_par = pd.Series({par: parameters[par].value for par in parameters}, name = -1)
         
@@ -113,10 +121,10 @@ class FitLogger:
         
         exp_refl = problem.experiment['refl']
         plt.plot(angles_in, exp_refl, c='red', lw=2,label = 'Experiment')
-        plt.plot(angles_in, model_refl, 'C0-', label='Initial Fit')
+        self.refl_plot, = plt.plot(angles_in, model_refl, 'C0-', label='Initial Fit')
         
         self.fitaxes_residual0 = self.fitaxes[0].twinx()
-        self.fitaxes_residual0.plot(angles_in,residual_refl, '.', c = 'grey')
+        self.refl_res_plot, = self.fitaxes_residual0.plot(angles_in,residual_refl, '.', c = 'grey')
         plt.ylabel('Residual')
         
         
@@ -127,10 +135,10 @@ class FitLogger:
         
         exp_fluor = self.problem.experiment['fluor_diode']
         plt.plot(angles_in, exp_fluor, c='red', lw=2,label = 'Experiment')
-        plt.plot(angles_in, model_fluor, c='C0', label='Initial Fit')
+        self.fluor_plot, = plt.plot(angles_in, model_fluor, c='C0', label='Initial Fit')
         
         self.fitaxes_residual1 = self.fitaxes[1].twinx()
-        self.fitaxes_residual1.plot(angles_in,residual_fluor, '.', c = 'grey')
+        self.fluor_res_plot, = self.fitaxes_residual1.plot(angles_in,residual_fluor, '.', c = 'grey')
         plt.ylabel('Residual')
 
         plt.tight_layout()
@@ -157,8 +165,64 @@ class FitLogger:
         # Abort Fit condition
         if iteration_counter > self.maxiter:
             return True
-        
-        
+
+        if self.intermediate_plotting and np.mod(iteration_counter, self.intermediate_plotting ) == 0:
+
+            ### Input Angle curves
+            model_fluor = xlf.abs2(self.problem.fluorescence_I_angle_in_dependent) / parameters['I_fluorescence'].value
+            model_refl = np.mean(xlf.abs2(self.problem.reflectivity), 0) / parameters['I_reflectivity'].value
+            residual_refl = (xlf.norm(self.problem.experiment['refl'] - model_refl ))  * parameters['weight_reflectivity'].value
+            residual_fluor = (xlf.norm(self.problem.experiment['fluor_diode'] - model_fluor))  * parameters['weight_fluorescence'].value
+
+            self.refl_plot.set_ydata(model_refl)
+            self.refl_res_plot.set_ydata(residual_refl)
+
+            self.fluor_plot.set_ydata(model_fluor)
+            self.fluor_res_plot.set_ydata(residual_fluor)
+
+            self.fitfig.canvas.draw()
+            self.fitfig.canvas.flush_events()
+
+
+            ### Parameters
+
+            iteration_axes = self.df_resid.index
+            plt.sca(self.devaxes[0])
+            self.devaxes[0].clear()
+
+            for parname in self.parameters:
+                par = self.parameters[parname]
+                if par.vary == False:
+                    continue
+
+                def normpar(par, values):
+                    """
+                    Normalize a parameter to a range between 0 and 1
+                    """
+                    return (values - par.min) / (par.max - par.min)
+
+                parlabel = f'{parname} = {par.value:.2e} [{par.min:.2e}  to {par.max:.2e}]'
+                plt.plot(iteration_axes, 100 * normpar(par, self.df_par[parname]), '.-', label=parlabel)
+
+            plt.ylim(0, 100)
+            plt.legend(fontsize=7)
+            plt.xlabel('No of Iterations')
+            plt.ylabel('Parameter value within its range / \%')
+
+            ### Residuals
+            plt.sca(self.devaxes[1])
+            self.devaxes[1].clear()
+
+            plt.plot(iteration_axes, self.df_resid['Refl'], '.-', label='Reflectivity Residual')
+            plt.plot(iteration_axes, self.df_resid['Fluor'], '.-', label='Fluorescence Residual')
+            plt.plot(iteration_axes, self.df_resid['Refl'] + self.df_resid['Fluor'], '.-', label='Total Residual')
+            plt.legend()
+            plt.xlabel('No of Iterations')
+            plt.ylabel('Residual Value')
+            plt.show(block = False)
+            plt.pause(0.1)
+
+
     def final_plot(self):
         parameters = self.parameters
         ### Add final fits to the plot
