@@ -46,7 +46,7 @@ axes = {'energies_in': energies_in,
         'angles_out':angles_out}
 
 
-my_problem = xlf.Problem(cavity, experiment_data = None, axes=axes, passive_layer_resolution = 30, active_layer_resolution = 30)
+my_problem = xlf.Problem(cavity, experiment_data = None, axes=axes, passive_layer_resolution = 2, active_layer_resolution = 2)
 
 
 parameters = cavity.parameters

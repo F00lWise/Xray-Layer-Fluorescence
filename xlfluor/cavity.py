@@ -102,10 +102,10 @@ class CavitySolution:
             (len(problem.energies_out), len(problem.angles_out), len(problem.z_axis),2,2), dtype=complex)*np.nan  #Lz or L(D-z_p)
 
         # Field strengths
-        self.incident_field_amplitude = np.empty((len(problem.energies_in),len(problem.angles_in),len(problem.z_axis)), dtype=complex)*np.nan # scalar at each point in input angle, input energy and z
-        self.fluorescence_local_amplitude = np.empty((len(problem.energies_in), len(problem.energies_out),len(problem.angles_in), len(problem.angles_out),len(problem.z_axis), 2), dtype=complex)*np.nan # vector (down, up) at each point
+        self.incident_field_amplitude                = np.empty((len(problem.energies_in), len(problem.angles_in), len(problem.z_axis)), dtype=complex)*np.nan # scalar at each point in input angle, input energy and z
+        self.fluorescence_local_amplitude            = np.empty((len(problem.energies_in), len(problem.energies_out),len(problem.angles_in), len(problem.angles_out),len(problem.z_axis), 2), dtype=complex)*np.nan # vector (down, up) at each point
         self.fluorescence_local_amplitude_propagated = np.empty((len(problem.energies_in), len(problem.energies_out),len(problem.angles_in), len(problem.angles_out),len(problem.z_axis)), dtype=complex)*np.nan # fluorescence amplitude from each point in z but propagated to surface
-        self.fluorescence_emitted_amplitude = np.empty((len(problem.energies_in), len(problem.energies_out),len(problem.angles_in), len(problem.angles_out)), dtype=complex)*np.nan# scalar (emitted upwards from z=0) at each point in input angle and input energy
+        self.fluorescence_emitted_amplitude          = np.empty((len(problem.energies_in), len(problem.energies_out),len(problem.angles_in), len(problem.angles_out)), dtype=complex)*np.nan# scalar (emitted upwards from z=0) at each point in input angle and input energy
 
         self.layer_solutions = [layer.solve(self.problem) for layer in
                                 cavity.layer_list[:-1]]  # calculate initial layer solutions
@@ -272,12 +272,12 @@ class CavitySolution:
                     #A_emitted = (L1i[1, 1] - (L1i[1, 0] * L1i[0, 1]) / L1i[0, 0]) * A_up
                     # Old Version: self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = way_to_the_surface * self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 1]
                     # New Version (16.08.21), reprocisity
-                    print(L1i[:,:,relevant_z_indices,:,:] @ self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, :].transpose((0,2,1,3)))
-                    print(self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices].shape)
-                    self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = L1i[:,:,relevant_z_indices,:,:] @ self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, :].transpose((0,2,1,3))
+                    self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = ( L1i[:,:,relevant_z_indices,0,0]*self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 0].transpose((1,2,0))\
+                        + L1i[:,:,relevant_z_indices,0,1]*self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 1].transpose((1,2,0)) ).transpose(2,0,1)
 
-                    #(1, 300, 1, 2, 2)
-                    #(1, 1, 300, 2) 
+                    #L1i[:,:,relevant_z_indices,:,:] @ self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, :].transpose((0,2,1,3))
+
+
             """ #This parallel code appears to run longer than the Non-parallel version! Apparently each Chunk is too small, or it might by copying the arrays in between threads...
             # Distribute tasks
             futures_to_results = {}
