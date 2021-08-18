@@ -239,8 +239,7 @@ class CavitySolution:
             self.incident_field_amplitude[:, :, iz] = self.L_matrices_in_partials[:, :, iz, 0, 0] + self.L_matrices_in_partials[:, :, iz, 1, 0] - \
                                                       (self.L_matrices_in_partials[:,:,iz,0,1] + self.L_matrices_in_partials[:,:,iz,1,1]) * \
             self.L_matrices_in[:,:,1,0] / self.L_matrices_in[:,:,1,1]
-
-    #@timeit
+            
     def _calc_fluorescence(self):
 
         # We are only interested in active layers
@@ -249,20 +248,53 @@ class CavitySolution:
                 continue
             relevant_z_indices = np.where(self.problem.z_layer_indices == n)[0]
             #LD = self.L_matrices_out
-            #L1 = self.L_matrices_out_partials#
+            L1 = self.L_matrices_out_partials#
             L1i = self.L_matrices_out_partials_inverse # Eout,Aout,z(layer)
             L2 = self.L_matrices_out_partials_reverse # Eout,Aout,z(layer)
 
-            R1 = -L1i[:,:,relevant_z_indices,0, 1] / L1i[:,:,relevant_z_indices,0, 0]  # -L1[1,0]/L1[1,1]
+            excitation_intensity = xlf.abs2(self.incident_field_amplitude[:,:,relevant_z_indices])       # Ein,Ain,z(layer)
+            fluorescence_intensity = excitation_intensity * layer.sigma_inel * layer.dz * self.problem.d_angle_out/(2*np.pi) # Ein,Ain,z(layer)
+            fluorescence_amplitude = np.sqrt(fluorescence_intensity)   # I Multiply the fluorescence amplitude with the z-resolution to make the result (sum) independent of number of layers.
+
+            way_to_the_surface = L1[:, :, relevant_z_indices, 0, 0] + L1[:, :, relevant_z_indices, 1, 0] - \
+                                                     ((L1[:,:,relevant_z_indices,0,1] + L1[:,:,relevant_z_indices,1,1]).transpose(2,0,1) * \
+                            self.L_matrices_out[:,:,1,0] / self.L_matrices_out[:,:,1,1]).transpose(1,2,0)
+          
+            # Non-parallel code
+            for iEin, Ein in enumerate(self.problem.energies_in):
+                for iAin, Ain in enumerate(self.problem.angles_in):
+                        
+                    #New version 2
+                    self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = (way_to_the_surface * fluorescence_amplitude[iEin, iAin, :]).transpose(2,0,1)
+
+        self.fluorescence_emitted_amplitude = np.nansum(self.fluorescence_local_amplitude_propagated,axis=4)
+
+                    
+                    
+    #@timeit
+    def _calc_fluorescence_old(self):
+
+        # We are only interested in active layers
+        for n, layer in enumerate(self.cavity.layer_list):
+            if not layer.is_active:
+                continue
+            relevant_z_indices = np.where(self.problem.z_layer_indices == n)[0]
+            #LD = self.L_matrices_out
+            L1 = self.L_matrices_out_partials#
+            L1i = self.L_matrices_out_partials_inverse # Eout,Aout,z(layer)
+            L2 = self.L_matrices_out_partials_reverse # Eout,Aout,z(layer)
+
+            R1 =  -L1i[:,:,relevant_z_indices,0, 1] / L1i[:,:,relevant_z_indices,0, 0]# -L1i[:,:,relevant_z_indices,0, 1] / L1i[:,:,relevant_z_indices,0, 0]  # -L1[1,0]/L1[1,1]
             R2 = -L2[:,:,relevant_z_indices,1, 0] / L2[:,:,relevant_z_indices,1, 1]  # -L2[0,1]/L2[1,1]
 
             excitation_intensity = xlf.abs2(self.incident_field_amplitude[:,:,relevant_z_indices])       # Ein,Ain,z(layer)
             fluorescence_intensity = excitation_intensity * layer.sigma_inel * layer.dz * self.problem.d_angle_out/(2*np.pi) # Ein,Ain,z(layer)
             fluorescence_amplitude = np.sqrt(fluorescence_intensity)   # I Multiply the fluorescence amplitude with the z-resolution to make the result (sum) independent of number of layers.
 
-            # No longer needed: way_to_the_surface = (L1i[:,:,relevant_z_indices,1, 1] - (L1i[:,:,relevant_z_indices,1, 0] * L1i[:,:,relevant_z_indices,0, 1]) / L1i[:,:,relevant_z_indices,0, 0]).transpose(2,0,1) # Eout,Aout, z(layer)
-
-
+            #
+            #way_to_the_surface = (L1i[:,:,relevant_z_indices,1, 1] - (L1i[:,:,relevant_z_indices,1, 0] * L1i[:,:,relevant_z_indices,0, 1]) / L1i[:,:,relevant_z_indices,0, 0]).transpose(2,0,1) # Eout,Aout, z(layer)
+            way_to_the_surface = 1/(L1[:,:,relevant_z_indices,1, 1]).transpose(2,0,1) 
+                
             # Non-parallel code
             for iEin, Ein in enumerate(self.problem.energies_in):
                 for iAin, Ain in enumerate(self.problem.angles_in):
@@ -270,12 +302,15 @@ class CavitySolution:
                     self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 1] = ((fluorescence_amplitude[iEin, iAin, :] * R2[...]) / (1 - R1[...] * R2[...])).transpose(2,0,1)  # A- (up)
 
                     #A_emitted = (L1i[1, 1] - (L1i[1, 0] * L1i[0, 1]) / L1i[0, 0]) * A_up
-                    # Old Version: self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = way_to_the_surface * self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 1]
+                    # Old Version: 
+                    self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = way_to_the_surface * self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 1]
                     # New Version (16.08.21), reprocisity
-                    self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = ( L1i[:,:,relevant_z_indices,0,0]*self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 0].transpose((1,2,0))\
-                        + L1i[:,:,relevant_z_indices,0,1]*self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 1].transpose((1,2,0)) ).transpose(2,0,1)
+                    #self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = ( L1i[:,:,relevant_z_indices,0,0]*self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 0].transpose((1,2,0))\
+                     #   + L1i[:,:,relevant_z_indices,0,1]*self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, 1].transpose((1,2,0)) ).transpose(2,0,1)
+                        
+                    #New version 2
+                    #self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = (way_to_the_surface * fluorescence_amplitude[iEin, iAin, :]).transpose(2,0,1)
 
-                    #L1i[:,:,relevant_z_indices,:,:] @ self.fluorescence_local_amplitude[iEin, :,iAin ,:, relevant_z_indices, :].transpose((0,2,1,3))
 
 
             """ #This parallel code appears to run longer than the Non-parallel version! Apparently each Chunk is too small, or it might by copying the arrays in between threads...

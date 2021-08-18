@@ -239,7 +239,7 @@ class FitLogger:
 
         plt.sca(self.fitaxes[1])
         plt.plot(angles_in, model_fluor, c='C1', label='Final Fit')
-        self.fitaxes_residual1.plot(angles_in,residual_refl, '.', c = 'k', label = 'Final Residual')
+        self.fitaxes_residual1.plot(angles_in,residual_fluor, '.', c = 'k', label = 'Final Residual')
         plt.legend()
         
         
