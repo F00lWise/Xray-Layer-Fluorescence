@@ -32,7 +32,6 @@ class Problem:
         ## store experiment
         self.experiment = experiment_data
         #### Generate coordinates to calculate everything in
-
         axes_list= []
         for i, axname in enumerate( ['energies_in','energies_out','angles_in','angles_out']):
             if experiment_data is not None and axname in experiment_data.keys():
@@ -88,8 +87,15 @@ class Problem:
         self.fluorescence_I_angle_out_dependent = np.zeros((len(self.angles_out)), dtype=np.complex)
 
 
+        ## At first calculate the full fields
+        self.full_field_solution = True
+        
         ## Finaly, propose this problem to a cavity:
-        cavity.propose_problem((self))
+        cavity.propose_problem(self)
+        
+        ## Normally only calculate field strength within the cavity that are relevant for the emitted flurescence
+        self.full_field_solution = False
+        
         if DEBUG:
             print('Problem Initiated.')
 
@@ -101,13 +107,14 @@ class Problem:
     def __repr__(self):
         return f'Problem({id(self)})'
 
-    def solve(self, cavity, parameters):
+    def solve(self, cavity, parameters,calculate_full_fields= False):
         assert cavity.solution.problem is self #just check that we are all pointing to the same problem
-
+        self.full_field_solution = calculate_full_fields
+        
         cavity.solution.solve(parameters)
 
         self.reflectivity = cavity.solution.calc_R()
-        self.fluorescence_I_angle_in_dependent = np.sum(cavity.solution.fluorescence_emitted_amplitude, axis=(0,1,3))
-        self.fluorescence_I_angle_out_dependent = np.sum(cavity.solution.fluorescence_emitted_amplitude, axis=(0,1,2))
+        self.fluorescence_I_angle_in_dependent = np.sum(cavity.solution.fluorescence_emitted_intensity, axis=(0,1,3))
+        self.fluorescence_I_angle_out_dependent = np.sum(cavity.solution.fluorescence_emitted_intensity, axis=(0,1,2))
         if DEBUG:
             print('Result Initiated.')

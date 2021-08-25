@@ -56,17 +56,17 @@ class Cavity:
         for n, layer in enumerate(layer_list):
             prefix = f'Layer_{n}_{layer.material.name}_'
             if not layer.final:
-                params.add(prefix + 'd', value=layer.d, min=layer.d - d_tolerance, max=layer.d + d_tolerance)
+                params.add(prefix + 'd', value=layer.d, min=np.max([layer.d - d_tolerance,0]), max=layer.d + d_tolerance)
             else:
                 params.add(prefix + 'd', value=layer.d, vary=False)
 
-            params.add(prefix + 'rho', value=layer.density, min=layer.density - rho_tolerance,
+            params.add(prefix + 'rho', value=layer.density, min=np.max([layer.density - rho_tolerance,0]),
                      max=layer.density + rho_tolerance)
         return params
     
     def get_relative_intensities(self, problem):
    
-        I_fluor = np.max(xlf.abs2(problem.fluorescence_I_angle_in_dependent))
+        I_fluor = np.max(problem.fluorescence_I_angle_in_dependent)
         I_refl = np.max(xlf.abs2(problem.reflectivity)[0, :])
 
         # Scaling parameters - multiplier to the  uncalibrated and normalized experimental data to fit to the model data
@@ -103,13 +103,17 @@ class CavitySolution:
 
         # Field strengths
         self.incident_field_amplitude                = np.empty((len(problem.energies_in), len(problem.angles_in), len(problem.z_axis)), dtype=complex)*np.nan # scalar at each point in input angle, input energy and z
+        self.emitted_field_amplitude                = np.empty((len(problem.energies_out), len(problem.angles_out), len(problem.z_axis)), dtype=complex)*np.nan # scalar at each point in input angle, input energy and z
         self.fluorescence_local_amplitude            = np.empty((len(problem.energies_in), len(problem.energies_out),len(problem.angles_in), len(problem.angles_out),len(problem.z_axis), 2), dtype=complex)*np.nan # vector (down, up) at each point
         self.fluorescence_local_amplitude_propagated = np.empty((len(problem.energies_in), len(problem.energies_out),len(problem.angles_in), len(problem.angles_out),len(problem.z_axis)), dtype=complex)*np.nan # fluorescence amplitude from each point in z but propagated to surface
-        self.fluorescence_emitted_amplitude          = np.empty((len(problem.energies_in), len(problem.energies_out),len(problem.angles_in), len(problem.angles_out)), dtype=complex)*np.nan# scalar (emitted upwards from z=0) at each point in input angle and input energy
+        self.fluorescence_emitted_intensity          = np.empty((len(problem.energies_in), len(problem.energies_out),len(problem.angles_in), len(problem.angles_out)), dtype=complex)*np.nan# scalar (emitted upwards from z=0) at each point in input angle and input energy
 
         self.layer_solutions = [layer.solve(self.problem) for layer in
                                 cavity.layer_list[:-1]]  # calculate initial layer solutions
         self.layer_solutions.append(cavity.layer_list[-1].solve(self.problem))
+
+        self.incident_field_calculated = False
+        self.emitted_field_calculated = False
 
         if DEBUG:
             print('ProblemSolution Initiated.')
@@ -125,7 +129,10 @@ class CavitySolution:
         self._calc_L_total()
         self._calc_L_partial()
 
-        self._calc_incident_field()
+        if self.problem.full_field_solution:
+            # Otherwise this is done only for the necessary depths z within calc_fluorescence
+            self.calc_incident_field()
+            self.calc_emitted_field()
 
         self._calc_fluorescence()
 
@@ -137,6 +144,7 @@ class CavitySolution:
         :param parameters:
         :return:
         """
+        full = self.problem.full_field_solution
 # Point to parallelize
         futures_to_layer_results = {}
         for n, layer in enumerate(self.problem.cavity.layer_list):
@@ -153,7 +161,10 @@ class CavitySolution:
                 self.layer_solutions[n] = future.result()
             except Exception as exc:
                 print('%r generated an exception: %s' % (n, exc))
-
+             
+        # reset possibly calculated results
+        self.incident_field_calculated = False
+        self.emitted_field_calculated = False
 
 
     #@timeit
@@ -183,26 +194,20 @@ class CavitySolution:
             partial_layer_index: int = self.problem.z_layer_indices[iz]
             partial_layer = self.cavity.layer_list[partial_layer_index]
 
-            """
-            # Mask all the values that we do not calculate anyways
-            if not partial_layer.is_active:
-                self.L_matrices_out_partials[:, :, iz, :, :] = np.nan
-                self.L_matrices_out_partials_inverse[:, :, iz, :, :] = np.nan
-            """
             # Cavity Matrix up to layer that will be split up
             for n, layer in enumerate(self.cavity.layer_list[:partial_layer_index]):
                 self.L_matrices_in_partials[:,:,iz,:,:] = layer.solution.L_matrices_in[:,:,:,:]  @ self.L_matrices_in_partials[:,:,iz,:,:]
-                if partial_layer.is_active:
+                if partial_layer.is_active or self.problem.full_field_solution:
                     self.L_matrices_out_partials[:,:,iz,:,:] = layer.solution.L_matrices_out[:,:,:,:] @ self.L_matrices_out_partials[:,:,iz,:,:]
 
             # Matrix of partial layer
             iz_within_layer = iz - np.where(self.problem.z_layer_indices == partial_layer_index)[0][0] # where statement finds the first z-index of the current partial layer
             self.L_matrices_in_partials[:,:,iz,:,:] = partial_layer.solution.L_matrices_in_partials[:,:,iz_within_layer,:,:]  @ self.L_matrices_in_partials[:,:,iz,:,:]
-            if partial_layer.is_active:
+            if partial_layer.is_active or self.problem.full_field_solution:
                 self.L_matrices_out_partials[:,:,iz,:,:] = partial_layer.solution.L_matrices_out_partials[:,:,iz_within_layer,:,:] @ self.L_matrices_out_partials[:,:,iz,:,:]
 
             # calculate reverse matrices: This equates to: L_2 = L_D @ L_1^-1
-            if partial_layer.is_active:
+            if partial_layer.is_active or self.problem.full_field_solution:
                 self.L_matrices_out_partials_inverse[:,:,iz,:,:] = np.linalg.inv(self.L_matrices_out_partials[:,:,iz,:,:]) #L(z_p)^-1
                 self.L_matrices_out_partials_reverse[:,:,iz,:,:] = self.L_matrices_out @ self.L_matrices_out_partials_inverse[:,:,iz,:,:] # L2 = L(D) @ L ^-1
 
@@ -230,15 +235,26 @@ class CavitySolution:
         return self.L_matrices_in[0, 0] - (self.L_matrices_in[0, 1] * self.L_matrices_in[1, 0]) / self.L_matrices_in[1, 1]
 
     #@timeit
-    def _calc_incident_field(self):
+    def calc_incident_field(self):
         """
         Calculate the field strength of the incident wave at all depth in z_axis
-        :return:
         """
-        for iz,z in enumerate(self.problem.z_axis):
-            self.incident_field_amplitude[:, :, iz] = self.L_matrices_in_partials[:, :, iz, 0, 0] + self.L_matrices_in_partials[:, :, iz, 1, 0] - \
-                                                      (self.L_matrices_in_partials[:,:,iz,0,1] + self.L_matrices_in_partials[:,:,iz,1,1]) * \
-            self.L_matrices_in[:,:,1,0] / self.L_matrices_in[:,:,1,1]
+        
+        self.incident_field_amplitude[:,:,:]= self.L_matrices_in_partials[:, :, :, 0, 0] + self.L_matrices_in_partials[:, :, :, 1, 0] - \
+                                                         ((self.L_matrices_in_partials[:,:,:,0,1] + self.L_matrices_in_partials[:,:,:,1,1]).transpose(2,0,1) * \
+                                self.L_matrices_in[:,:,1,0] / self.L_matrices_in[:,:,1,1]).transpose(1,2,0)
+
+        self.incident_field_calculated = True
+        
+    def calc_emitted_field(self):
+        """
+        Calculate the field strength of the emitted wave at all depth in z_axis
+        This is for the full cavity and only needed 
+        """
+        self.emitted_field_amplitude[:,:,:]  = self.L_matrices_out_partials[:, :, :, 0, 0] + self.L_matrices_out_partials[:, :, :, 1, 0] - \
+                                ((self.L_matrices_out_partials[:,:,:,0,1] + self.L_matrices_out_partials[:,:,:,1,1]).transpose(2,0,1) * \
+                                self.L_matrices_out[:,:,1,0] / self.L_matrices_out[:,:,1,1]).transpose(1,2,0)
+        self.emitted_field_calculated = True
             
     def _calc_fluorescence(self):
 
@@ -247,27 +263,28 @@ class CavitySolution:
             if not layer.is_active:
                 continue
             relevant_z_indices = np.where(self.problem.z_layer_indices == n)[0]
-            #LD = self.L_matrices_out
-            L1 = self.L_matrices_out_partials#
-            L1i = self.L_matrices_out_partials_inverse # Eout,Aout,z(layer)
-            L2 = self.L_matrices_out_partials_reverse # Eout,Aout,z(layer)
 
-            excitation_intensity = xlf.abs2(self.incident_field_amplitude[:,:,relevant_z_indices])       # Ein,Ain,z(layer)
-            fluorescence_intensity = excitation_intensity * layer.sigma_inel * layer.dz * self.problem.d_angle_out/(2*np.pi) # Ein,Ain,z(layer)
-            fluorescence_amplitude = np.sqrt(fluorescence_intensity)   # I Multiply the fluorescence amplitude with the z-resolution to make the result (sum) independent of number of layers.
-
-            way_to_the_surface = L1[:, :, relevant_z_indices, 0, 0] + L1[:, :, relevant_z_indices, 1, 0] - \
-                                                     ((L1[:,:,relevant_z_indices,0,1] + L1[:,:,relevant_z_indices,1,1]).transpose(2,0,1) * \
-                            self.L_matrices_out[:,:,1,0] / self.L_matrices_out[:,:,1,1]).transpose(1,2,0)
+            #excitation_intensity = xlf.abs2(self.incident_field_amplitude[:,:,relevant_z_indices])       # Ein,Ain,z(layer)
+            #fluorescence_intensity = excitation_intensity * layer.sigma_inel * layer.dz # Ein,Ain,z(layer)
+            if not self.incident_field_calculated:               
+                self.incident_field_amplitude[:,:,relevant_z_indices]  = self.L_matrices_in_partials[:, :, relevant_z_indices, 0, 0] + self.L_matrices_in_partials[:, :, relevant_z_indices, 1, 0] - \
+                                                         ((self.L_matrices_in_partials[:,:,relevant_z_indices,0,1] + self.L_matrices_in_partials[:,:,relevant_z_indices,1,1]).transpose(2,0,1) * \
+                                self.L_matrices_in[:,:,1,0] / self.L_matrices_in[:,:,1,1]).transpose(1,2,0)
+            
+            fluorescence_amplitude = np.sqrt(xlf.abs2(self.incident_field_amplitude[:,:,relevant_z_indices])  * layer.sigma_inel * layer.dz) # np.sqrt(fluorescence_intensity)   
+         
+            if not self.emitted_field_calculated:
+                self.emitted_field_amplitude[:,:,relevant_z_indices]  = self.L_matrices_out_partials[:, :, relevant_z_indices, 0, 0] + self.L_matrices_out_partials[:, :, relevant_z_indices, 1, 0] - \
+                                                         ((self.L_matrices_out_partials[:,:,relevant_z_indices,0,1] + self.L_matrices_out_partials[:,:,relevant_z_indices,1,1]).transpose(2,0,1) * \
+                                self.L_matrices_out[:,:,1,0] / self.L_matrices_out[:,:,1,1]).transpose(1,2,0)
+            
           
             # Non-parallel code
             for iEin, Ein in enumerate(self.problem.energies_in):
                 for iAin, Ain in enumerate(self.problem.angles_in):
-                        
-                    #New version 2
-                    self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = (way_to_the_surface * fluorescence_amplitude[iEin, iAin, :]).transpose(2,0,1)
+                    self.fluorescence_local_amplitude_propagated[iEin, :,iAin ,:, relevant_z_indices] = (self.emitted_field_amplitude[:,:,relevant_z_indices]  * fluorescence_amplitude[iEin, iAin, :]).transpose(2,0,1)
 
-        self.fluorescence_emitted_amplitude = np.nansum(self.fluorescence_local_amplitude_propagated,axis=4)
+        self.fluorescence_emitted_intensity = np.nansum(xlf.abs2(self.fluorescence_local_amplitude_propagated),axis=4)
 
                     
                     
@@ -334,6 +351,6 @@ class CavitySolution:
                     print('%r generated an exception: %s' % (n, exc))
             """
         # Finally, sum all the fluorescence over the z axis
-        self.fluorescence_emitted_amplitude = np.nansum(self.fluorescence_local_amplitude_propagated,axis=4)
+        self.fluorescence_emitted_intensity = np.nansum(self.fluorescence_local_amplitude_propagated,axis=4)
 
 

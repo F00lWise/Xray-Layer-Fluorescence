@@ -59,7 +59,7 @@ class Layer:
 
         solution_key = (self.d, self.material.density)
         if not solution_key in self.known_solutions.keys():
-            self.known_solutions[solution_key] = LayerSolution(self, solution_key, problem)
+            self.known_solutions[solution_key] = LayerSolution(self, solution_key, problem, problem.full_field_solution)
 
         self.solution = self.known_solutions[solution_key]
         return self.known_solutions[solution_key]
@@ -140,7 +140,7 @@ class LayerSolution:
     Calculates all required single-layer L-matrices in the constructor
     """
 
-    def __init__(self, layer, solution_key, problem):
+    def __init__(self, layer, solution_key, problem, full):
         self.solution_ID = solution_key
         self.problem = problem
 
@@ -152,7 +152,7 @@ class LayerSolution:
         self.L_matrices_in_partials = np.empty(
             (len(self.problem.energies_in), len(self.problem.angles_in), len(layer.z_points), 2, 2),
             dtype=complex)
-        if layer.is_active:  # Emitted fields are only needed with depth resolution for active layers
+        if layer.is_active or full:  # Emitted fields are only needed with depth resolution for active layers
             self.L_matrices_out_partials = np.empty(
                 (len(self.problem.energies_out), len(self.problem.angles_out), len(layer.z_points), 2, 2),
                 dtype=complex)
@@ -177,7 +177,7 @@ class LayerSolution:
                 else:
                     self.L_matrices_out[i_E, i_a, :, :] = layer.L(E, angle)
 
-                if layer.is_active:
+                if layer.is_active or full:
                     for i_z, z_in_layer in enumerate(layer.z_points):
                         self.L_matrices_out_partials[i_E, i_a, i_z, :, :] = layer.L(E, angle, z_in_layer)
 

@@ -30,7 +30,7 @@ def cost_function(parameters, problem):
     problem.solve(problem.cavity,parameters)
 
     angles_in = xlf.rad2deg(problem.angles_in)
-    model_fluor = xlf.abs2(problem.fluorescence_I_angle_in_dependent)/ parameters['I_fluorescence'].value
+    model_fluor = (problem.fluorescence_I_angle_in_dependent)/ parameters['I_fluorescence'].value
     model_refl = np.mean(xlf.abs2(problem.reflectivity),0) / parameters['I_reflectivity'].value
 
     residual_refl = norm((problem.experiment['refl'] - model_refl ))
@@ -45,7 +45,7 @@ def cost_function(parameters, problem):
 def fit_monitoring(parameters, iteration_counter, residual, problem, plot_axes = None):
     print(f'Iteration {iteration_counter}')
     angles_in = xlf.rad2deg(problem.angles_in)
-    model_fluor = xlf.abs2(problem.fluorescence_I_angle_in_dependent)/ parameters['I_fluorescence'].value
+    model_fluor =problem.fluorescence_I_angle_in_dependent / parameters['I_fluorescence'].value
     model_refl = np.mean(xlf.abs2(problem.reflectivity),0) / parameters['I_reflectivity'].value
 
     L = len(angles_in)
@@ -180,9 +180,10 @@ class FitLogger:
             self.fluor_plot.set_ydata(model_fluor)
             self.fluor_res_plot.set_ydata(residual_fluor)
 
+
             self.fitfig.canvas.draw()
             self.fitfig.canvas.flush_events()
-
+            
 
             ### Parameters
 
@@ -219,6 +220,9 @@ class FitLogger:
             plt.legend()
             plt.xlabel('No of Iterations')
             plt.ylabel('Residual Value')
+            
+            self.devfig.canvas.draw()
+            
             plt.show(block = False)
             plt.pause(0.1)
 
