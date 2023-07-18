@@ -6,8 +6,26 @@ DEBUG = False
 
 class Problem:
     """
-    This class takes care of the coordinate system that the simulation is performed in.
-    """
+        The Problem class defines the coordinate system that the simulation is performed in.
+
+        Attributes:
+            cavity (Cavity): The cavity associated with the problem.
+            experiment (dict): Experimental data used for the problem, including fluorescence and reflectivity traces,
+                               input and output angles, and input energies.
+            axes (tuple): Tuple containing the axes data for the coordinate system used in the simulation.
+            z_axis (ndarray): Array representing the z-axis coordinate values within the cavity.
+            z_layer_indices (ndarray): Array containing the indices of the corresponding layers for each z-axis point.
+            energies_in (ndarray): Array of input energies.
+            energies_out (ndarray): Array of output energies.
+            angles_in (ndarray): Array of input angles.
+            angles_out (ndarray): Array of output angles.
+            reflectivity (ndarray): Array representing the calculated reflectivity for each input angle.
+            fluorescence_I_angle_in_dependent (ndarray): Array representing the total emitted fluorescence intensity
+                                                         for each input angle.
+            fluorescence_I_angle_out_dependent (ndarray): Array representing the total emitted fluorescence intensity
+                                                          for each output angle.
+            full_field_solution (bool): Flag indicating whether the full field solution is calculated during the simulation.
+        """
     def __init__(self, cavity, experiment_data: dict = None, axes: tuple = None, passive_layer_resolution: int = 1, active_layer_resolution: int = 10):
         """
 
@@ -21,7 +39,7 @@ class Problem:
                     'energies_in': np.array([loaded_scan['energy'], ]),
                     'energies_out': np.array([6400, ])
                 }
-        :param axes: Either this or axes_data must be given to  build coordinate system
+        :param axes: Either this or axes_data must be given to build coordinate system
         """
         ### Initialize multiprocessing pool
         self.executor = concurrent.futures.ThreadPoolExecutor(max_workers=cavity.N_layers)
@@ -82,9 +100,9 @@ class Problem:
         assert np.all(np.diff(self.angles_out) - self.d_angle_out <1e-13)# Assert that angles out has a constant differential
 
         # Some results that should be readily available but ate not directly computed by cavity.solve
-        self.reflectivity = np.zeros((len(self.angles_in)), dtype=np.complex)
-        self.fluorescence_I_angle_in_dependent = np.zeros((len(self.angles_in)), dtype=np.complex)
-        self.fluorescence_I_angle_out_dependent = np.zeros((len(self.angles_out)), dtype=np.complex)
+        self.reflectivity = np.zeros((len(self.angles_in)), dtype=np.complex128)
+        self.fluorescence_I_angle_in_dependent = np.zeros((len(self.angles_in)), dtype=np.complex128)
+        self.fluorescence_I_angle_out_dependent = np.zeros((len(self.angles_out)), dtype=np.complex128)
 
 
         ## At first calculate the full fields

@@ -74,8 +74,8 @@ class Composite(Material):
         self.atomar_density = new_density / (self.average_atomar_weight * C_amu)  # total number of atoms per m3
         self.partial_number_densities = self.relative_number_density * self.atomar_density  # number of atoms of each species per m3
 
-    def f(self, E) -> np.complex:
-        all_f = np.array([element.f(E) for element in self.elements], dtype=np.complex)
+    def f(self, E) -> np.complex128:
+        all_f = np.array([element.f(E) for element in self.elements], dtype=np.complex128)
         return np.sum(self.relative_number_density * all_f)
 
 
