@@ -195,6 +195,7 @@ class CavitySolution:
         self.L_matrices_in[...] = np.eye(2)
         self.L_matrices_out[...] = np.eye(2)
 
+        #Iterates through layers and multiplies the layer matrices to get the total cavity matrix
         for n, layer in enumerate(self.cavity.layer_list):
             self.L_matrices_in = layer.solution.L_matrices_in @ self.L_matrices_in
             self.L_matrices_out = layer.solution.L_matrices_out @ self.L_matrices_out
@@ -208,6 +209,7 @@ class CavitySolution:
         self.L_matrices_in_partials[...] = np.eye(2)
         self.L_matrices_out_partials[...] = np.eye(2)
 
+        #Iterates through layers and multiplies the layer matrices up to the active layer, then breaks that one up and multiplies it as well
         for iz, z in enumerate(self.problem.z_axis):
             # which layer are we in?
             partial_layer_index: int = self.problem.z_layer_indices[iz]
