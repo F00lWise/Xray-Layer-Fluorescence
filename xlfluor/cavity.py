@@ -239,17 +239,22 @@ class CavitySolution:
             imprecision[:,:,iz,:,:] = Assembled_L[:,:,iz,:,:] - self.L_matrices_out
         return imprecision
 
-    def calc_R(self):
+    def calc_R(self) -> ndarray:
         """
-        Cavity reflectivity of incident field according to last solve() call
-        :return:
+        Calculates the reflectivity for each input angle based on the last solve() call
+
+        Returns:
+            ndarray: Array representing the calculated reflectivity for each input angle.
         """
+
         return -(self.L_matrices_in[:,:,1, 0] / self.L_matrices_in[:,:,1, 1])
 
-    def calc_T(self):
+    def calc_T(self) -> ndarray:
         """
-        Cavity transmission of incident field according to last solve() call
-        :return:
+        Calculates the transmittance for each input angle based on the last solve() call
+
+        Returns:
+            ndarray: Array representing the calculated transmittance for each input angle.
         """
         return self.L_matrices_in[0, 0] - (self.L_matrices_in[0, 1] * self.L_matrices_in[1, 0]) / self.L_matrices_in[1, 1]
 

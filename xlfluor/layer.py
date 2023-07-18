@@ -10,11 +10,63 @@ DEBUG = True
 
 class Layer:
     """
-    Container class for layer data
+    Represents an individual layer in the cavity.
+
+    Attributes:
+        material (Union[xlf.Element, xlf.Composite]): Material of the layer.
+        d (float): Thickness of the layer.
+        density (Optional[float]): Density of the layer.
+        sigma_inel (float): Inelastic scattering cross-section of the layer.
+        is_active (bool): Flag indicating if the layer is an active layer.
+        min_z (float): Minimum z-coordinate value of the layer.
+        max_z (float): Maximum z-coordinate value of the layer.
+        z_points (ndarray): Array representing the z-coordinate values within the layer.
+        dz (float): Differential z-coordinate value within the layer.
+        known_solutions (dict): Dictionary storing the known layer solutions.
+        solution (LayerSolution): Solution object associated with the layer.
+        final (bool): Flag indicating if the layer is the final layer in the cavity.
+        index (Optional[int]): Index of the layer.
+
+    Methods:
+        __init__(self, material, thickness, inelastic_cross=0, density=None, final=False):
+            Initialize the Layer object.
+
+        solve(self, problem, d=None, rho=None) -> LayerSolution:
+            Calculates the solution matrices for the layer and stores them as a LayerSolution object.
+            If a solution for the given thickness and density is already known, it is loaded from the dictionary.
+            Returns the solution.
+
+        beta(self, E, theta) -> complex:
+            Calculates the beta value for the layer based on the given photon energy and grazing angle.
+            Returns the complex beta value.
+
+        L(self, E, theta, d=None) -> ndarray:
+            Calculates the transfer matrix for the layer based on the given photon energy and grazing angle.
+            Returns the transfer matrix.
+
+        L_final(self, E, theta) -> ndarray:
+            Calculates the transfer matrix for the final layer in the cavity based on the given photon energy and grazing angle.
+            Returns the transfer matrix.
+
+        R(self, E, theta) -> complex:
+            Calculates the reflectivity for the layer based on the given photon energy and grazing angle.
+            Returns the complex reflectivity value.
+
+        T(self, E, theta) -> complex:
+            Calculates the transmittance for the layer based on the given photon energy and grazing angle.
+            Returns the complex transmittance value.
     """
-
     def __init__(self, material, thickness, inelastic_cross=0, density=None, final = False):
+        """
+        Initialize the Layer object.
 
+        Args:
+            material (Union[xlf.Element, xlf.Composite]): Material of the layer.
+            thickness (float): Thickness of the layer.
+            inelastic_cross (float, optional): Inelastic scattering cross-section of the layer. Defaults to 0.
+            density (float, optional): Density of the layer. Defaults to None.
+            final (bool, optional): Flag indicating if the layer is the final layer in the cavity. Defaults to False.
+        """
         if density is not None:  # Specifit density specified, so I need to re-define
             if type(material) is xlf.Element:
                 material = xlf.Element(name=material.name, Z=material.Z, atom_weight=material.atom_weight,
@@ -39,17 +91,19 @@ class Layer:
         if DEBUG:
             print(f'{self.material.name} Layer Initiated.')
 
-    def solve(self, problem, d: float = None, rho: float = None):
+    def solve(self, problem, d: float = None, rho: float = None) -> xlf.LayerSolution:
         """
-        This function calculates solution matrices for the layer and stores them as a LayerSolution Objext in
-        self.solution as well as in the known_solutions dictionary.
-        If a solution for this thickness and density is known in the dictionary, it is loaded to self.solution instead
+        Calculates the solution matrices for the layer and stores them as a LayerSolution object.
+        If a solution for this thickness and density is known in the dictionary, it is loaded to self.solution instead.
         Also returns the solution.
-        :param problem: Problem (mostly necessary for coordinates)
-        :param d: thickness
-        :param rho: density
-        :param final: If true, layer is treated as substate
-        :return: LayerSolution
+
+        Args:
+            problem (Problem): The problem associated with the layer.
+            d (float, optional): Thickness of the layer. Defaults to None.
+            rho (float, optional): Density of the layer. Defaults to None.
+
+        Returns:
+            LayerSolution: The solution object associated with the layer.
         """
         #print(f'trying to solve layer for {problem}, with {d}, and {rho}')
         if rho is not None:
@@ -64,21 +118,36 @@ class Layer:
         self.solution = self.known_solutions[solution_key]
         return self.known_solutions[solution_key]
 
-    def beta(self, E, theta):
+    def beta(self, E, theta) -> complex:
+        """
+        Calculates the beta value for the layer based on the given photon energy and grazing angle.
+
+        Args:
+            E (float): Photon energy.
+            theta (float): Grazing angle.
+
+        Returns:
+            complex: The complex beta value.
+        """
         wavl_given = xlf.eV2nm(E) * 1e-9  # in meters
         prefactor = self.material.atomar_density * wavl_given ** 2 / (2 * np.pi)
         f = self.material.f(E)
         self.cdelta = prefactor * C_r0 * (-np.real(f) + 1j * np.imag(f))
         return np.sqrt(1 + (2 * self.cdelta / theta ** 2))
 
-    def L(self, E, theta, d=None):
+    def L(self, E, theta, d=None) -> np.ndarray:
         """
-        Calculate transfer matrix
-        :param E: Photon Energy
-        :param theta: grazing angle
-        :param d: thickness
-        :return: L (transfer matrix)
+        Calculates the transfer matrix for the layer based on the given photon energy and grazing angle.
+
+        Args:
+            E (float): Photon energy.
+            theta (float): Grazing angle.
+            d (float, optional): Thickness of the layer. Defaults to None.
+
+        Returns:
+            L: The transfer matrix.
         """
+
         # This Matrix assumes that L20@L01 = L21, which is only the case when surface roughness sigma = 0
         ## General Parameters
         if d is None:
@@ -115,7 +184,17 @@ class Layer:
         L = M_0n @ P @ M_n0
         return L
 
-    def L_final(self, E, theta):
+    def L_final(self, E, theta)-> np.ndarray:
+        """
+        Calculates the transfer matrix for the final layer in the cavity based on the given photon energy and grazing angle.
+
+        Args:
+            E (float): Photon energy.
+            theta (float): Grazing angle.
+
+        Returns:
+            L_final: The transfer matrix.
+        """
         beta_0 = 1 + 0j
         beta_N = self.beta(E, theta)
 
@@ -126,21 +205,65 @@ class Layer:
         L = np.array([[0, 0], [0, 1]]) @ M_N0
         return L
 
-    def R(self, E, theta):
+    def R(self, E, theta)-> complex:
+        """
+        Calculates the reflectivity for the layer based on the given photon energy and grazing angle.
+
+        Args:
+            E (float): Photon energy.
+            theta (float): Grazing angle.
+
+        Returns:
+            R: The complex reflectivity value.
+        """
         L = self.L(E, theta)
         return -(L[1, 0] / L[1, 1])
 
-    def T(self, E, theta):
+    def T(self, E, theta) -> complex:
+        """
+        Calculates the transmittance for the layer based on the given photon energy and grazing angle.
+
+        Args:
+            E (float): Photon energy.
+            theta (float): Grazing angle.
+
+        Returns:
+            complex: The complex transmittance value.
+        """
         L = self.L(E, theta)
         return L[0, 0] - (L[0, 1] * L[1, 0]) / L[1, 1]
 
 
 class LayerSolution:
     """
-    Calculates all required single-layer L-matrices in the constructor
+    Calculates all required single-layer L-matrices in the constructor.
+
+    Attributes:
+        solution_ID (Tuple[float, float]): Tuple representing the solution key (thickness, density) for the layer.
+        problem (Problem): The problem associated with the layer solution.
+        L_matrices_in (ndarray): Array storing the calculated L-matrices for incident fields within the layer.
+        L_matrices_out (ndarray): Array storing the calculated L-matrices for emitted fields from the layer.
+        L_matrices_in_partials (ndarray): Array storing the partial L-matrices for incident fields within the layer with depth resolution.
+        L_matrices_out_partials (ndarray): Array storing the partial L-matrices for emitted fields from the layer with depth resolution.
+
+    Methods:
+        __init__(self, layer, solution_key, problem, full):
+            Initialize the LayerSolution object and calculate the required L-matrices.
     """
 
     def __init__(self, layer, solution_key, problem, full):
+        """
+        Initialize the LayerSolution object and calculate the required L-matrices.
+
+        Args:
+            layer (Layer): The layer associated with the solution.
+            solution_key (Tuple[float, float]): Tuple representing the solution key (thickness, density) for the layer.
+            problem (Problem): The problem associated with the layer solution.
+            full (bool): Flag indicating if full L-matrices are required.
+
+        Raises:
+            AssertionError: If the layer is neither active nor full L-matrices are required.
+        """
         self.solution_ID = solution_key
         self.problem = problem
 
