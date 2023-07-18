@@ -21,9 +21,27 @@ def timeit(func):
 
 class Cavity:
     """
-    Just a small class to hold the cavity together
+    Represents an optical cavity system.
+
+    Attributes:
+        N_layers (int): Number of layers in the cavity.
+        layer_list (list): List of Layer objects representing the layers in the cavity.
+        solution (CavitySolution): Solution object associated with the cavity.
+
+    Methods:
+        propose_problem(problem: Problem) -> None:
+            Proposes a problem to the cavity, linking the cavity's solution to the problem.
+
+        solve(problem: Problem) -> None:
+            Solves the problem associated with the cavity.
+
+        calc_R() -> ndarray:
+            Calculates the reflectivity for each input angle based on the solved problem.
+
+        calc_T() -> ndarray:
+            Calculates the transmittance for each input angle based on the solved problem.
     """
-    def __init__(self, layer_list):
+    def __init__(self, layer_list: list[xlf.Layer]):
         self.D = np.sum([layer.d for layer in layer_list[:-1]])
         self.layer_list = layer_list
         self.N_layers = len(layer_list)
@@ -38,7 +56,7 @@ class Cavity:
         if DEBUG:
             print('Cavity Initiated.')
 
-    def propose_problem(self, problem):
+    def propose_problem(self, problem) -> None:
         """
         Takes a problem and offers a solution
         :param problem:
@@ -49,6 +67,7 @@ class Cavity:
     def layer_list_to_parameters(self,layer_list, d_tolerance=2e-9, rho_tolerance=0.5e3):
         """
         takes in a parameter list and generates a layer list from it which can be treated by an optimizer
+        :param d_tolerance:
         :param layer_list:
         :return:
         """
@@ -241,8 +260,8 @@ class CavitySolution:
         """
         
         self.incident_field_amplitude[:,:,:]= self.L_matrices_in_partials[:, :, :, 0, 0] + self.L_matrices_in_partials[:, :, :, 1, 0] - \
-                                                         ((self.L_matrices_in_partials[:,:,:,0,1] + self.L_matrices_in_partials[:,:,:,1,1]).transpose(2,0,1) * \
-                                self.L_matrices_in[:,:,1,0] / self.L_matrices_in[:,:,1,1]).transpose(1,2,0)
+                                                         ((self.L_matrices_in_partials[:,:,:,0,1] + self.L_matrices_in_partials[:,:,:,1,1]).transpose(2,0,1) *
+                                                          self.L_matrices_in[:,:,1,0] / self.L_matrices_in[:,:,1,1]).transpose(1,2,0)
 
         self.incident_field_calculated = True
         
@@ -252,8 +271,8 @@ class CavitySolution:
         This is for the full cavity and only needed 
         """
         self.emitted_field_amplitude[:,:,:]  = self.L_matrices_out_partials[:, :, :, 0, 0] + self.L_matrices_out_partials[:, :, :, 1, 0] - \
-                                ((self.L_matrices_out_partials[:,:,:,0,1] + self.L_matrices_out_partials[:,:,:,1,1]).transpose(2,0,1) * \
-                                self.L_matrices_out[:,:,1,0] / self.L_matrices_out[:,:,1,1]).transpose(1,2,0)
+                                ((self.L_matrices_out_partials[:,:,:,0,1] + self.L_matrices_out_partials[:,:,:,1,1]).transpose(2,0,1) *
+                                 self.L_matrices_out[:,:,1,0] / self.L_matrices_out[:,:,1,1]).transpose(1,2,0)
         self.emitted_field_calculated = True
             
     def _calc_fluorescence(self):
@@ -268,15 +287,15 @@ class CavitySolution:
             #fluorescence_intensity = excitation_intensity * layer.sigma_inel * layer.dz # Ein,Ain,z(layer)
             if not self.incident_field_calculated:               
                 self.incident_field_amplitude[:,:,relevant_z_indices]  = self.L_matrices_in_partials[:, :, relevant_z_indices, 0, 0] + self.L_matrices_in_partials[:, :, relevant_z_indices, 1, 0] - \
-                                                         ((self.L_matrices_in_partials[:,:,relevant_z_indices,0,1] + self.L_matrices_in_partials[:,:,relevant_z_indices,1,1]).transpose(2,0,1) * \
-                                self.L_matrices_in[:,:,1,0] / self.L_matrices_in[:,:,1,1]).transpose(1,2,0)
+                                                         ((self.L_matrices_in_partials[:,:,relevant_z_indices,0,1] + self.L_matrices_in_partials[:,:,relevant_z_indices,1,1]).transpose(2,0,1) *
+                                                          self.L_matrices_in[:,:,1,0] / self.L_matrices_in[:,:,1,1]).transpose(1,2,0)
             
             fluorescence_amplitude = np.sqrt(xlf.abs2(self.incident_field_amplitude[:,:,relevant_z_indices])  * layer.sigma_inel * layer.dz) # np.sqrt(fluorescence_intensity)   
          
             if not self.emitted_field_calculated:
                 self.emitted_field_amplitude[:,:,relevant_z_indices]  = self.L_matrices_out_partials[:, :, relevant_z_indices, 0, 0] + self.L_matrices_out_partials[:, :, relevant_z_indices, 1, 0] - \
-                                                         ((self.L_matrices_out_partials[:,:,relevant_z_indices,0,1] + self.L_matrices_out_partials[:,:,relevant_z_indices,1,1]).transpose(2,0,1) * \
-                                self.L_matrices_out[:,:,1,0] / self.L_matrices_out[:,:,1,1]).transpose(1,2,0)
+                                                         ((self.L_matrices_out_partials[:,:,relevant_z_indices,0,1] + self.L_matrices_out_partials[:,:,relevant_z_indices,1,1]).transpose(2,0,1) *
+                                                          self.L_matrices_out[:,:,1,0] / self.L_matrices_out[:,:,1,1]).transpose(1,2,0)
             
           
             # Non-parallel code

@@ -126,6 +126,14 @@ class Problem:
         return f'Problem({id(self)})'
 
     def solve(self, cavity, parameters,calculate_full_fields= False):
+        """
+        Solves the problem within the specified cavity using the given parameters.
+
+        Args:
+            cavity (Cavity): The cavity used for the simulation.
+            parameters (lmfit.Parameters): Parameters for the simulation.
+            calculate_full_fields (bool): Flag indicating whether to calculate the standing wave field.
+        """
         assert cavity.solution.problem is self #just check that we are all pointing to the same problem
         self.full_field_solution = calculate_full_fields
         

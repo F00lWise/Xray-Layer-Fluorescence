@@ -12,13 +12,13 @@ DEBUG = True
 
 #### Let us build a cavity
 vacuum = xlf.Vacuum()
-carbon = xlf.Element(name = 'c', Z= 6, atom_weight = 12.011,density = 2.2*1e3) # the factor 1e3 converts from g/cm3 to Kg/m3
-silicon = xlf.Element(name = 'si', Z= 14, atom_weight = 28.086,density = 2.33*1e3)
-iron = xlf.Element(name = 'fe', Z = 26, atom_weight=55.845, density=7.87*1e3)
-oxygen = xlf.Element(name = 'o', Z = 8, atom_weight=15.999, density=0.143E-02*1e3) # Oxygen density is as gas!!
-platinum = xlf.Element(name = 'pt', Z = 78, atom_weight=195.078, density=21.5*1e3)
+carbon = xlf.Element(name = 'C', Z= 6, atom_weight = 12.011,density = 2.2*1e3) # the factor 1e3 converts from g/cm3 to Kg/m3
+silicon = xlf.Element(name = 'Si', Z= 14, atom_weight = 28.086,density = 2.33*1e3)
+iron = xlf.Element(name = 'Fe', Z = 26, atom_weight=55.845, density=7.87*1e3)
+oxygen = xlf.Element(name = 'O', Z = 8, atom_weight=15.999, density=0.143E-02*1e3) # Oxygen density is as gas!!
+platinum = xlf.Element(name = 'Pt', Z = 78, atom_weight=195.078, density=21.5*1e3)
 
-iron_oxide = xlf.Composite(name = 'fe2o3', elements=[iron, oxygen], density=5.07*1e3, composition =[2,3])
+iron_oxide = xlf.Composite(name = 'Fe2O3', elements=[iron, oxygen], density=5.07*1e3, composition =[2,3])
 
 layer_list_custom = [
     xlf.Layer(platinum, 1.755 * 1e-9, density=20.5e3),
@@ -130,7 +130,7 @@ for ax in [ax1, ax2]:
 #####################################################
 ######### 2d-Plot
 #####################################################
-plotmat = xlf.abs2(cavity.solution.fluorescence_emitted_amplitude[0,0,:,:])
+plotmat = cavity.solution.fluorescence_emitted_intensity[0,0,:,:]
 
 #plotmat = xlf.abs2(np.nansum(cavity.solution.fluorescence_local_amplitude[0,0,:,:,:,0],2)) # sum over depth of non-propagated fluorescence
 #plotmat = cplxsq(my_problem.fluor_emitted_from_z[:,:,:])
