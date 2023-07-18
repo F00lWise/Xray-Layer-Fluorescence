@@ -35,10 +35,10 @@ class Cavity:
         solve(problem: Problem) -> None:
             Solves the problem associated with the cavity.
 
-        calc_R() -> ndarray:
+        calc_R() -> np.ndarray:
             Calculates the reflectivity for each input angle based on the solved problem.
 
-        calc_T() -> ndarray:
+        calc_T() -> np.ndarray:
             Calculates the transmittance for each input angle based on the solved problem.
     """
     def __init__(self, layer_list: list[xlf.Layer]):
@@ -239,7 +239,7 @@ class CavitySolution:
             imprecision[:,:,iz,:,:] = Assembled_L[:,:,iz,:,:] - self.L_matrices_out
         return imprecision
 
-    def calc_R(self) -> ndarray:
+    def calc_R(self) -> np.ndarray:
         """
         Calculates the reflectivity for each input angle based on the last solve() call
 
@@ -249,7 +249,7 @@ class CavitySolution:
 
         return -(self.L_matrices_in[:,:,1, 0] / self.L_matrices_in[:,:,1, 1])
 
-    def calc_T(self) -> ndarray:
+    def calc_T(self) -> np.ndarray:
         """
         Calculates the transmittance for each input angle based on the last solve() call
 

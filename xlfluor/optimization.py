@@ -89,26 +89,18 @@ class FitLogger:
         self.maxiter = maxiter
         self.intermediate_plotting = intermediate_plotting
 
-        # Make a pandas series from the parameter values
-        s_par = pd.Series({par: parameters[par].value for par in parameters}, name = -1)
-        
-        # And start a dataset with them
-        self.df_par = pd.DataFrame(columns = [par for par in parameters])
-        self.df_par = self.df_par.append(s_par)
-        
+        # Make a pandas dataset from the parameter values
+        self.df_par = pd.DataFrame.from_records([{par: parameters[par].value for par in parameters}], index=[-1])
+
         # Compute initial residuals
         model_fluor = xlf.abs2(problem.fluorescence_I_angle_in_dependent)/ parameters['I_fluorescence'].value
         model_refl = np.mean(xlf.abs2(problem.reflectivity),0) / parameters['I_reflectivity'].value
         residual_refl = (xlf.norm(problem.experiment['refl'] - model_refl ))  * parameters['weight_reflectivity'].value
         residual_fluor = (xlf.norm(problem.experiment['fluor_diode'] - model_fluor))  * parameters['weight_fluorescence'].value
 
-        s_resid = pd.Series({'Refl':np.sum(residual_refl),'Fluor':np.sum(residual_fluor)}, name = -1)
-        
         # And start a dataset with them
-        self.df_resid = pd.DataFrame(columns = ['Refl', 'Fluor'])
-        self.df_resid = self.df_resid.append(s_resid)
-        
-        
+        self.df_resid = pd.DataFrame.from_records([{'Refl':np.sum(residual_refl),'Fluor':np.sum(residual_fluor)}],columns = ['Refl', 'Fluor'], index=[-1])
+
         ##### Initial solution plot
         self.fitfig, self.fitaxes  = plt.subplots(2,1,figsize=(7, 5))
         angles_in = xlf.rad2deg(problem.angles_in)
@@ -149,17 +141,16 @@ class FitLogger:
     def logging(self,parameters, iteration_counter, residual, problem):
         
         # Log parameters
-        self.df_par = self.df_par.append(pd.Series({par: parameters[par].value for par in parameters}, name = iteration_counter))
-        
+        self.df_par = pd.concat([self.df_par, pd.DataFrame.from_records({par: parameters[par].value for par in parameters}, index = [iteration_counter])])
         # Sum residuals
         L = len(problem.angles_in)
         residuals = {'Refl':np.sum(residual[L:]),'Fluor':np.sum(residual[:L])}
         print(residuals)
-        s_resid = pd.Series(residuals, name = iteration_counter)
+        s_resid = pd.DataFrame.from_records(residuals, index = [iteration_counter])
         
         # Log Residuals
-        self.df_resid = self.df_resid.append(s_resid)
-        
+        self.df_resid = pd.concat([self.df_resid,s_resid])
+
         print(f'Iteration {iteration_counter} complete. Residuals: {residuals}')
         
         # Abort Fit condition
@@ -187,7 +178,7 @@ class FitLogger:
 
             ### Parameters
 
-            iteration_axes = self.df_resid.index
+            iteration_axes = list(self.df_resid.index)
             plt.sca(self.devaxes[0])
             self.devaxes[0].clear()
 

@@ -91,7 +91,7 @@ class Layer:
         if DEBUG:
             print(f'{self.material.name} Layer Initiated.')
 
-    def solve(self, problem, d: float = None, rho: float = None) -> xlf.LayerSolution:
+    def solve(self, problem, d: float = None, rho: float = None):
         """
         Calculates the solution matrices for the layer and stores them as a LayerSolution object.
         If a solution for this thickness and density is known in the dictionary, it is loaded to self.solution instead.
