@@ -41,7 +41,7 @@ class Cavity:
         calc_T() -> np.ndarray:
             Calculates the transmittance for each input angle based on the solved problem.
     """
-    def __init__(self, layer_list: list[xlf.Layer]):
+    def __init__(self, layer_list: list):
         self.D = np.sum([layer.d for layer in layer_list[:-1]])
         self.layer_list = layer_list
         self.N_layers = len(layer_list)
